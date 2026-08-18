@@ -1,0 +1,78 @@
+# Tracked Serena config. Everything else under .serena/ is local and gitignored.
+# After editing this file, run scripts/serena-setup so the copy Serena reads
+# (central state dir, if that folder exists) matches.
+#
+# `serena project index` rewrites this file from its bundled template.
+# A file-level header does not survive that; comments attached to a key do.
+project_name: "raddy"  # the name Serena and the LLM use for this project
+
+# rust first: default language and fallback. toml covers Cargo.toml, raddy.toml,
+# and artifact manifests. cpp / php are added when those trees exist — enabling
+# them on an empty tree just fails health-check.
+language_servers:
+- rust
+- toml
+
+encoding: "utf-8"
+ignore_all_files_in_gitignore: true
+read_only: false
+line_ending: lf
+
+# Handoff and build outputs are not source. target/ is also ignored by
+# rust-analyzer itself; listing it here keeps Serena's own search off it.
+ignored_paths:
+- "proj/**"
+- "target/**"
+- "artifacts/**"
+- "guest/php/build/**"
+- "guest/php/out/**"
+
+# rust-analyzer can wedge; clippy flycheck is the diagnostic that matches
+# `just check`. initializationOptions replace top-level keys only — no deep
+# merge — so `check` is the full object, not a delta.
+ls_specific_settings:
+  rust:
+    initializationOptions:
+      checkOnSave: true
+      check:
+        allTargets: true
+        command: clippy
+        extraArgs: []
+        extraEnv: {}
+        features: null
+        ignore: []
+        invocationLocation: workspace
+        invocationStrategy: per_workspace
+        noDefaultFeatures: null
+        overrideCommand: null
+        targets: null
+      rust:
+        analyzerTargetDir: target/rust-analyzer
+
+included_optional_tools:
+- restart_language_server
+- get_diagnostics_for_symbol
+
+excluded_tools: []
+fixed_tools: []
+
+# Given once on activation. The brief is AGENTS.md; the plan is proj/plan.md.
+initial_prompt: |
+  Read AGENTS.md first. Then read proj/plan.md before writing any product code.
+
+  Stages run in order. just check is the gate. The plan's pin table outranks
+  training data. Do not add tests the current stage did not name.
+
+ls_workspace_folders:
+- .
+
+ls_additional_workspace_folders: []
+
+default_modes:
+added_modes:
+symbol_info_budget:
+language_backend:
+activation_command:
+activation_command_timeout: 180.0
+read_only_memory_patterns: []
+ignored_memory_patterns: []

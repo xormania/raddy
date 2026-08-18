@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Serena may keep project configuration in a central state directory
+# (project_serena_folder_location). The tracked copy at .serena/project.yml
+# is the source of truth; this copies it into the location Serena reads.
+# Run after changing the tracked file, and once after first activation.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+central="${XDG_STATE_HOME:-$HOME/.local/state}/serena-projects/raddy/.serena"
+if [ ! -d "$central" ]; then
+	echo "no central Serena state yet; activate the project once, then rerun" >&2
+	exit 1
+fi
+cp .serena/project.yml "$central/project.yml"
+echo "synced .serena/project.yml -> $central/project.yml"
+echo "restart the language server (or the session) for language-server settings to take effect"

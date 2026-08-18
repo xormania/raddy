@@ -1,0 +1,31 @@
+# Untracked handoff. Root-anchored so a nested fixture named proj/ is not swallowed.
+/proj/
+
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Guest / artifact build outputs
+/artifacts/
+/guest/php/build/
+/guest/php/out/
+*.cwasm
+
+# Serena local state (project.yml is tracked)
+/.serena/*
+!/.serena/project.yml
+
+# env / editor
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+
+# runtime
+*.log
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
