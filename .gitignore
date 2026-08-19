@@ -10,6 +10,7 @@
 /artifacts/
 /guest/php/build/
 /guest/php/out/
+/guest/toy/out/
 *.cwasm
 
 # Serena local state (project.yml is tracked)

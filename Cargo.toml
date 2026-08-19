@@ -4,6 +4,7 @@ members = [
     "crates/raddy",
     "crates/raddy-config",
     "crates/raddy-abi",
+    "crates/raddy-executor",
     "crates/raddy-bdd",
 ]
 
@@ -15,7 +16,9 @@ publish = false
 
 [workspace.dependencies]
 figment = { version = "0.10.19", features = ["toml", "env"] }
-tokio = { version = "1.53.1", default-features = false, features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.53.1", default-features = false, features = ["macros", "rt-multi-thread", "io-util", "sync"] }
+bytes = "1.12.1"
+wasmtime = "47.0.3"
 cucumber = "0.23.0"
 proptest = "1.11.0"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -25,7 +28,7 @@ serde_json = "1.0.151"
 ulid = { version = "3.0.0", features = ["serde"] }
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 missing_debug_implementations = "warn"
 
 [profile.release]

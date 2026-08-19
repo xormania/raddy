@@ -9,6 +9,8 @@ publish.workspace = true
 cucumber.workspace = true
 raddy = { path = "../raddy" }
 raddy-config = { path = "../raddy-config" }
+raddy-executor = { path = "../raddy-executor" }
+raddy-abi = { path = "../raddy-abi" }
 tokio.workspace = true
 toml.workspace = true
 

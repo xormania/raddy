@@ -1,0 +1,161 @@
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
+
+use wasmtime::{Config, Engine, InstanceAllocationStrategy, Module};
+
+use crate::ExecError;
+
+/// Builder for the wasmtime engine. All knobs are validated here.
+#[derive(Clone, Debug)]
+pub struct EngineBuilder {
+    pooling: bool,
+    memory_init_cow: bool,
+    epoch_tick: Duration,
+}
+
+impl Default for EngineBuilder {
+    fn default() -> Self {
+        Self {
+            pooling: true,
+            memory_init_cow: true,
+            epoch_tick: Duration::from_millis(10),
+        }
+    }
+}
+
+impl EngineBuilder {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn pooling(mut self, enabled: bool) -> Self {
+        self.pooling = enabled;
+        self
+    }
+
+    #[must_use]
+    pub fn memory_init_cow(mut self, enabled: bool) -> Self {
+        self.memory_init_cow = enabled;
+        self
+    }
+
+    #[must_use]
+    pub fn epoch_tick(mut self, tick: Duration) -> Self {
+        self.epoch_tick = tick;
+        self
+    }
+
+    pub fn build(self) -> Result<EngineFacade, ExecError> {
+        if self.epoch_tick.is_zero() {
+            return Err(ExecError::Artifact(
+                "epoch_tick must be greater than zero".into(),
+            ));
+        }
+        let mut config = Config::new();
+        if self.pooling {
+            config.allocation_strategy(InstanceAllocationStrategy::pooling());
+        }
+        config.memory_init_cow(self.memory_init_cow);
+        config.epoch_interruption(true);
+        let engine = Engine::new(&config).map_err(|err| ExecError::Artifact(err.to_string()))?;
+        let ticker = Ticker::spawn(engine.clone(), self.epoch_tick);
+        Ok(EngineFacade {
+            engine,
+            epoch_tick: self.epoch_tick,
+            pooling: self.pooling,
+            memory_init_cow: self.memory_init_cow,
+            _ticker: Arc::new(ticker),
+        })
+    }
+}
+
+/// Facade over wasmtime `Engine`. The 47 → 48 LTS bump should touch this file.
+#[derive(Clone, Debug)]
+pub struct EngineFacade {
+    engine: Engine,
+    epoch_tick: Duration,
+    pooling: bool,
+    memory_init_cow: bool,
+    _ticker: Arc<Ticker>,
+}
+
+impl EngineFacade {
+    #[must_use]
+    pub fn engine(&self) -> &Engine {
+        &self.engine
+    }
+
+    #[must_use]
+    pub fn epoch_tick(&self) -> Duration {
+        self.epoch_tick
+    }
+
+    #[must_use]
+    pub fn pooling_enabled(&self) -> bool {
+        self.pooling
+    }
+
+    #[must_use]
+    pub fn memory_init_cow_enabled(&self) -> bool {
+        self.memory_init_cow
+    }
+
+    pub fn load_wasm_file(&self, path: &Path) -> Result<Module, ExecError> {
+        Module::from_file(&self.engine, path).map_err(|err| ExecError::Artifact(err.to_string()))
+    }
+
+    pub fn load_wasm_bytes(&self, bytes: &[u8]) -> Result<Module, ExecError> {
+        Module::from_binary(&self.engine, bytes).map_err(|err| ExecError::Artifact(err.to_string()))
+    }
+
+    /// Load a precompiled cwasm produced by this wasmtime version.
+    ///
+    /// # Safety
+    /// `path` must be a `.cwasm` serialized by the same wasmtime crate version.
+    #[allow(unsafe_code)]
+    pub fn load_cwasm_file(&self, path: &Path) -> Result<Module, ExecError> {
+        // SAFETY: caller supplies a cwasm from this engine version (§3.1 / §C6).
+        unsafe { Module::deserialize_file(&self.engine, path) }
+            .map_err(|err| ExecError::Artifact(err.to_string()))
+    }
+}
+
+#[derive(Debug)]
+struct Ticker {
+    stop: Arc<AtomicBool>,
+    join: Option<JoinHandle<()>>,
+}
+
+impl Ticker {
+    fn spawn(engine: Engine, tick: Duration) -> Self {
+        let stop = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&stop);
+        let join = thread::Builder::new()
+            .name("raddy-epoch".into())
+            .spawn(move || {
+                while !flag.load(Ordering::Relaxed) {
+                    thread::sleep(tick);
+                    engine.increment_epoch();
+                }
+            })
+            .expect("epoch ticker thread starts");
+        Self {
+            stop,
+            join: Some(join),
+        }
+    }
+}
+
+impl Drop for Ticker {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
+        }
+    }
+}

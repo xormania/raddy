@@ -1,4 +1,5 @@
 # Development recipes. `just check` is the commit gate.
+# From Stage 1, guest C builds need WASI_SDK_PATH (wasi-sdk 33).
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
@@ -28,6 +29,20 @@ bench-check:
     set -euo pipefail
     echo "TODO: bench-check lands in stage 5" >&2
     exit 1
+
+guest-toy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${WASI_SDK_PATH:?WASI_SDK_PATH must point at a wasi-sdk 33 root}"
+    out=guest/toy/out
+    mkdir -p "$out"
+    clang="$WASI_SDK_PATH/bin/clang"
+    for name in echo spin trap; do
+        "$clang" --target=wasm32-wasip1 -nostdlib \
+            -Wl,--no-entry -Wl,--export=raddy_execute -Wl,--export-memory \
+            -Wl,--allow-undefined -O2 \
+            -o "$out/$name.wasm" "guest/toy/$name.c"
+    done
 
 guest-php:
     #!/usr/bin/env bash

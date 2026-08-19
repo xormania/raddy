@@ -12,6 +12,7 @@ project_name: "raddy"  # the name Serena and the LLM use for this project
 language_servers:
 - rust
 - toml
+- cpp
 
 encoding: "utf-8"
 ignore_all_files_in_gitignore: true
