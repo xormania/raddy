@@ -52,12 +52,14 @@ fn main() {
         .expect("rt");
     let n = 21_u32;
     let toy = exec();
+    let resume_toy = exec().with_pool(0, 1).expect("resume pool");
 
     let mut resume = Vec::new();
     for _ in 0..n {
         let t0 = Instant::now();
-        let _ = toy.pool().steal().expect("steal");
+        let mut resumed = resume_toy.pool().steal().expect("resume snapshot");
         resume.push(t0.elapsed().as_nanos());
+        resumed.mark_spent();
     }
 
     let mut e2e = Vec::new();
@@ -74,6 +76,7 @@ fn main() {
                 .expect("execute");
             ttfb.push(t0.elapsed().as_nanos());
             while resp.body.recv().await.is_some() {}
+            let _ = resp.response_complete.send(());
             resp.done.await.expect("done").expect("clean");
             e2e.push(t0.elapsed().as_nanos());
         }

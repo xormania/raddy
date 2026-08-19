@@ -1,5 +1,5 @@
 {
-  "resume_p50_ns": 57,
-  "e2e_hello_warm_p50_ns": 51502,
-  "ttfb_p50_ns": 51153
+  "resume_p50_ns": 1142,
+  "e2e_hello_warm_p50_ns": 113121,
+  "ttfb_p50_ns": 78057
 }

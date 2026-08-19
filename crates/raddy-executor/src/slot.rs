@@ -172,6 +172,7 @@ mod tests {
             head_tx,
             body_tx,
             Duration::from_secs(1),
+            Duration::from_secs(1),
         );
         let exec = warm
             .begin(host, Duration::from_secs(1))

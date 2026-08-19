@@ -44,6 +44,7 @@ async fn collect(exec: &PhpExecutor, method: &str, target: &str, body: Vec<u8>) 
     while let Some(chunk) = resp.body.recv().await {
         out.extend_from_slice(&chunk);
     }
+    let _ = resp.response_complete.send(());
     resp.done.await.expect("done").expect("clean end");
     (status, out)
 }
@@ -82,5 +83,6 @@ async fn php_cookies_preserve_order() {
         .collect();
     assert_eq!(cookies, ["a=1", "b=2"]);
     while resp.body.recv().await.is_some() {}
+    let _ = resp.response_complete.send(());
     resp.done.await.expect("done").expect("clean end");
 }

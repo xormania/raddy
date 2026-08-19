@@ -4,9 +4,29 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use raddy_artifact::LoadedArtifact;
 use wasmtime::{Config, Engine, InstanceAllocationStrategy, Module};
 
 use crate::ExecError;
+
+pub const WASMTIME_VERSION: &str = "47.0.3";
+
+#[must_use]
+pub fn host_target() -> String {
+    match std::env::consts::OS {
+        "linux" => {
+            let environment = if cfg!(target_env = "musl") {
+                "musl"
+            } else {
+                "gnu"
+            };
+            format!("{}-unknown-linux-{environment}", std::env::consts::ARCH)
+        }
+        "macos" => format!("{}-apple-darwin", std::env::consts::ARCH),
+        "windows" => format!("{}-pc-windows-msvc", std::env::consts::ARCH),
+        other => format!("{}-unknown-{other}", std::env::consts::ARCH),
+    }
+}
 
 /// Builder for the wasmtime engine. All knobs are validated here.
 #[derive(Clone, Debug)]
@@ -116,6 +136,15 @@ impl EngineFacade {
     pub fn serialize_module(&self, module: &Module) -> Result<Vec<u8>, ExecError> {
         module
             .serialize()
+            .map_err(|err| ExecError::Artifact(err.to_string()))
+    }
+
+    /// Load bytes that were hash- and version-verified by `raddy-artifact`.
+    #[allow(unsafe_code)]
+    pub fn load_verified_artifact(&self, artifact: LoadedArtifact) -> Result<Module, ExecError> {
+        // SAFETY: `LoadedArtifact` can only be constructed by the loader,
+        // which verifies the open file's hash and Wasmtime version.
+        unsafe { Module::deserialize_open_file(&self.engine, artifact.into_precompiled()) }
             .map_err(|err| ExecError::Artifact(err.to_string()))
     }
 

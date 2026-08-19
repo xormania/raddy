@@ -17,7 +17,7 @@ mod toy;
 pub use body::{MemoryBody, OpenBody};
 pub use cgi::{CgiExecutor, PhpExecutor, discover_repo_path};
 pub use cgi_parse::{CgiParsed, parse_cgi_response};
-pub use engine::{EngineBuilder, EngineFacade};
+pub use engine::{EngineBuilder, EngineFacade, WASMTIME_VERSION, host_target};
 pub use error::ExecError;
 pub use guest_sdk::is_wasi_sdk_33;
 pub use limits::{MAX_REQ_BODY_BYTES, MAX_RESP_CHUNK_BYTES, MAX_RESP_HEAD_BYTES};
@@ -29,10 +29,8 @@ pub use toy::{ToyExecutor, snap_guest_raw, snap_guest_wizer, toy_guest_wasm};
 
 use std::future::Future;
 
-use bytes::Bytes;
 use raddy_abi::{Envelope, ResponseHead};
 use tokio::io::AsyncRead;
-use tokio::sync::mpsc;
 
 /// One request handed to an [`Executor`].
 pub struct ExecRequest {
@@ -44,9 +42,11 @@ pub struct ExecRequest {
 pub struct ExecResponse {
     pub head: ResponseHead,
     /// Closed by the executor when the guest calls `raddy_resp_end`.
-    pub body: mpsc::Receiver<Bytes>,
+    pub body: tokio::sync::mpsc::Receiver<bytes::Bytes>,
     /// Completes when the worker finishes. `Ok(())` only on a clean end.
     pub done: tokio::sync::oneshot::Receiver<Result<(), ExecError>>,
+    /// The response adapter sends this after the body reaches its consumer.
+    pub response_complete: tokio::sync::oneshot::Sender<()>,
     /// Completes after the spent instance is dropped.
     pub teardown: tokio::sync::oneshot::Receiver<()>,
 }
@@ -66,6 +66,7 @@ impl std::fmt::Debug for ExecResponse {
             .field("head", &self.head)
             .field("body", &"<channel>")
             .field("done", &"<oneshot>")
+            .field("response_complete", &"<oneshot>")
             .field("teardown", &"<oneshot>")
             .finish()
     }

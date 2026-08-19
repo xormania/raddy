@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 mimalloc = "0.1.52"
+raddy-artifact = { path = "../raddy-artifact" }
 raddy-config = { path = "../raddy-config" }
 raddy-executor = { path = "../raddy-executor" }
 raddy-server = { path = "../raddy-server" }

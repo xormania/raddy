@@ -149,20 +149,7 @@ pub fn load_from_process() -> Result<Config, String> {
 
 /// Bind the configured listener and serve the hello-symfony snapshot.
 pub async fn run_http(cfg: Config) -> Result<(), String> {
-    let facade = raddy_executor::EngineBuilder::new()
-        .epoch_tick(Duration::from_millis(cfg.executor.epoch_tick_ms.get()))
-        .build()
-        .map_err(|err| err.to_string())?;
-    let module = facade
-        .load_wasm_bytes(raddy_executor::snap_guest_wizer())
-        .map_err(|err| err.to_string())?;
-    let exec = raddy_executor::ToyExecutor::with_strategy(
-        facade,
-        module,
-        Duration::from_millis(cfg.executor.deadline_ms.get()),
-        raddy_executor::RestoreStrategy::Snapshot,
-    )
-    .map_err(|err| err.to_string())?;
+    let exec = build_executor(&cfg)?;
     let limits = ServerLimits {
         concurrency: cfg.server.concurrency as usize,
         request_timeout: Duration::from_millis(cfg.server.request_timeout_ms.get()),
@@ -170,6 +157,40 @@ pub async fn run_http(cfg: Config) -> Result<(), String> {
     serve(cfg.server.listen, exec, limits, shutdown_signal())
         .await
         .map_err(|err| err.to_string())
+}
+
+/// Build the production snapshot executor from the configured artifact and pool limits.
+pub fn build_executor(cfg: &Config) -> Result<raddy_executor::ToyExecutor, String> {
+    let facade = raddy_executor::EngineBuilder::new()
+        .epoch_tick(Duration::from_millis(cfg.executor.epoch_tick_ms.get()))
+        .build()
+        .map_err(|err| err.to_string())?;
+    let artifact = raddy_artifact::load_artifact(
+        &cfg.executor.artifact,
+        &raddy_executor::host_target(),
+        raddy_executor::WASMTIME_VERSION,
+    )
+    .map_err(|err| err.to_string())?;
+    let module = facade
+        .load_verified_artifact(artifact)
+        .map_err(|err| err.to_string())?;
+    raddy_executor::ToyExecutor::with_strategy(
+        facade,
+        module,
+        Duration::from_millis(cfg.executor.deadline_ms.get()),
+        raddy_executor::RestoreStrategy::Snapshot,
+    )
+    .map_err(|err| err.to_string())?
+    .with_pool(
+        cfg.executor.pool_min as usize,
+        cfg.executor.pool_max as usize,
+    )
+    .map(|exec| {
+        exec.with_teardown_deadline(Duration::from_millis(
+            cfg.executor.teardown_deadline_ms.get(),
+        ))
+    })
+    .map_err(|err| err.to_string())
 }
 
 async fn shutdown_signal() {

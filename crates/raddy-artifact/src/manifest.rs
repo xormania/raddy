@@ -76,6 +76,15 @@ pub fn parse_manifest(toml_text: &str) -> Result<ArtifactManifest, ArtifactError
             "module.sha256 must be 64 hex digits".into(),
         ));
     }
+    if parsed
+        .precompiled
+        .values()
+        .any(|item| item.sha256.len() != 64 || !item.sha256.bytes().all(|b| b.is_ascii_hexdigit()))
+    {
+        return Err(ArtifactError::Manifest(
+            "precompiled sha256 pins must be 64 hex digits".into(),
+        ));
+    }
     Ok(parsed)
 }
 

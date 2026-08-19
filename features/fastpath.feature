@@ -11,7 +11,8 @@ Feature: Fast path
 
   @stage-5
   Scenario: A burst above pool_min is refilled back to idle
-    Given a snapshot server with pool_min 2 and pool_max 4
+    Given a slow pooled server with pool_min 2 and pool_max 4
     When I GET "/hello?name=xor" 3 times
-    Then the HTTP status is 200
+    Then all 3 HTTP statuses are 200
+    And the peak pool use exceeded pool_min
     And the idle pool size returns to 2

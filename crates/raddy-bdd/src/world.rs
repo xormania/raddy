@@ -23,5 +23,6 @@ pub struct BddWorld {
     pub prior_body: Option<String>,
     pub teardown_after_body: Option<bool>,
     pub pool_idle: Option<usize>,
+    pub burst_statuses: Vec<u16>,
     pub snapshot_exec: Option<raddy_executor::ToyExecutor>,
 }

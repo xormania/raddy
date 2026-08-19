@@ -86,7 +86,7 @@ artifact NAME:
         exit 1
     fi
     wizer_bin=${WIZER:-wizer}
-    out=artifacts/hello-symfony
+    out=artifacts/hello
     mkdir -p "$out/app.fs"
     raw=$(mktemp)
     trap 'rm -f "$raw"' EXIT
@@ -98,14 +98,18 @@ artifact NAME:
     sum=$(sha256sum "$out/guest.wasm" | awk '{print $1}')
     wasmtime_bin=${WASMTIME:-wasmtime}
     cwasm="$out/guest.$(uname -m)-unknown-linux-gnu.cwasm"
-    if command -v "$wasmtime_bin" >/dev/null; then
-        "$wasmtime_bin" compile -o "$cwasm" "$out/guest.wasm"
-        csum=$(sha256sum "$cwasm" | awk '{print $1}')
-        triple=$(uname -m)-unknown-linux-gnu
-    else
-        csum=
-        triple=
+    actual=$($wasmtime_bin --version)
+    if [[ "$actual" != wasmtime\ 47.0.3* ]]; then
+        echo "wasmtime 47.0.3 required, got: $actual" >&2
+        exit 1
     fi
+    "$wasmtime_bin" compile \
+        -W epoch-interruption=y \
+        -O pooling-allocator=y \
+        -O memory-init-cow=y \
+        -o "$cwasm" "$out/guest.wasm"
+    csum=$(sha256sum "$cwasm" | awk '{print $1}')
+    triple=$(uname -m)-unknown-linux-gnu
     {
         echo '[artifact]'
         echo 'name = "hello-symfony"'
@@ -122,13 +126,11 @@ artifact NAME:
         echo '[limits]'
         echo 'memory_max_mib = 64'
         echo 'deadline_ms = 30000'
-        if [[ -n "$csum" ]]; then
-            echo
-            echo "[precompiled.$triple]"
-            echo "cwasm = \"$(basename "$cwasm")\""
-            echo 'wasmtime = "47.0.3"'
-            echo "sha256 = \"$csum\""
-        fi
+        echo
+        echo "[precompiled.$triple]"
+        echo "cwasm = \"$(basename "$cwasm")\""
+        echo 'wasmtime = "47.0.3"'
+        echo "sha256 = \"$csum\""
     } > "$out/raddy.artifact.toml"
     cp guest/apps/hello-symfony/public/index.php "$out/app.fs/index.php"
     echo "wrote $out (sha256 $sum)"

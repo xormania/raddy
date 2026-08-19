@@ -51,6 +51,7 @@ async fn collect(exec: &ToyExecutor, target: &str) -> (u16, Vec<(String, String)
     while let Some(chunk) = resp.body.recv().await {
         body.extend_from_slice(&chunk);
     }
+    let _ = resp.response_complete.send(());
     resp.done.await.expect("done").expect("clean end");
     (status, headers, body)
 }
@@ -145,7 +146,7 @@ deadline_ms = 30000
 
 #[allow(unsafe_code)]
 #[test]
-fn serialize_deserialize_is_the_default_load() {
+fn cwasm_round_trips_through_engine_facade() {
     let facade = raddy_executor::EngineBuilder::new()
         .epoch_tick(Duration::from_millis(10))
         .build()

@@ -1821,6 +1821,7 @@ name = "raddy"
 version = "0.1.0"
 dependencies = [
  "mimalloc",
+ "raddy-artifact",
  "raddy-config",
  "raddy-executor",
  "raddy-server",

@@ -1,7 +1,7 @@
 //! Warm instance pool. Spent slots are never reused (C4.1).
 
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::Duration;
 
@@ -22,9 +22,10 @@ struct PoolInner {
     pre: InstancePre<HostState>,
     idle: Mutex<Vec<ReadySlot>>,
     in_use: AtomicUsize,
+    peak_in_use: AtomicUsize,
+    total: AtomicUsize,
     min: usize,
     max: usize,
-    stop: AtomicBool,
     response_done: Mutex<Option<std::time::Instant>>,
     teardown_done: Mutex<Option<std::time::Instant>>,
 }
@@ -40,6 +41,7 @@ impl std::fmt::Debug for InstancePool {
         f.debug_struct("InstancePool")
             .field("idle", &self.idle_count())
             .field("in_use", &self.in_use())
+            .field("peak_in_use", &self.peak_in_use())
             .field("min", &self.inner.min)
             .field("max", &self.inner.max)
             .finish()
@@ -60,9 +62,10 @@ impl InstancePool {
             pre,
             idle: Mutex::new(Vec::with_capacity(min)),
             in_use: AtomicUsize::new(0),
+            peak_in_use: AtomicUsize::new(0),
+            total: AtomicUsize::new(0),
             min,
             max,
-            stop: AtomicBool::new(false),
             response_done: Mutex::new(None),
             teardown_done: Mutex::new(None),
         });
@@ -71,7 +74,7 @@ impl InstancePool {
         };
         pool.fill_to_min()?;
         if min > 0 {
-            let bg = Arc::clone(&inner);
+            let bg = Arc::downgrade(&inner);
             thread::Builder::new()
                 .name("raddy-pool-refill".into())
                 .spawn(move || refill_loop(bg))
@@ -90,13 +93,20 @@ impl InstancePool {
         let slot = match popped {
             Some(slot) => slot,
             None => {
-                if self.inner.in_use.load(Ordering::SeqCst) >= self.inner.max {
+                if !reserve_slot(&self.inner) {
                     return Err(ExecError::Saturated);
                 }
-                self.mint()?
+                match self.mint() {
+                    Ok(slot) => slot,
+                    Err(err) => {
+                        self.inner.total.fetch_sub(1, Ordering::SeqCst);
+                        return Err(err);
+                    }
+                }
             }
         };
-        self.inner.in_use.fetch_add(1, Ordering::SeqCst);
+        let in_use = self.inner.in_use.fetch_add(1, Ordering::SeqCst) + 1;
+        self.inner.peak_in_use.fetch_max(in_use, Ordering::SeqCst);
         Ok(Stolen {
             slot: Some(slot),
             inner: Arc::clone(&self.inner),
@@ -119,8 +129,18 @@ impl InstancePool {
     }
 
     #[must_use]
+    pub fn peak_in_use(&self) -> usize {
+        self.inner.peak_in_use.load(Ordering::SeqCst)
+    }
+
+    #[must_use]
     pub fn min(&self) -> usize {
         self.inner.min
+    }
+
+    #[must_use]
+    pub fn max(&self) -> usize {
+        self.inner.max
     }
 
     pub fn note_response_done(&self) {
@@ -154,10 +174,14 @@ impl InstancePool {
     }
 
     fn fill_to_min(&self) -> Result<(), ExecError> {
-        while self.idle_count() < self.inner.min
-            && self.idle_count() + self.in_use() < self.inner.max
-        {
-            let slot = self.mint()?;
+        while self.idle_count() < self.inner.min && reserve_slot(&self.inner) {
+            let slot = match self.mint() {
+                Ok(slot) => slot,
+                Err(err) => {
+                    self.inner.total.fetch_sub(1, Ordering::SeqCst);
+                    return Err(err);
+                }
+            };
             self.inner
                 .idle
                 .lock()
@@ -169,14 +193,6 @@ impl InstancePool {
 
     fn mint(&self) -> Result<ReadySlot, ExecError> {
         mint_slot(&self.inner)
-    }
-}
-
-impl Drop for InstancePool {
-    fn drop(&mut self) {
-        if Arc::strong_count(&self.inner) == 1 {
-            self.inner.stop.store(true, Ordering::Relaxed);
-        }
     }
 }
 
@@ -215,6 +231,7 @@ impl Drop for Stolen {
         };
         if self.spent {
             drop(slot);
+            self.inner.total.fetch_sub(1, Ordering::SeqCst);
             return;
         }
         self.inner
@@ -239,20 +256,68 @@ fn mint_slot(inner: &PoolInner) -> Result<ReadySlot, ExecError> {
     Ok(ReadySlot { store, instance })
 }
 
-fn refill_loop(inner: Arc<PoolInner>) {
-    while !inner.stop.load(Ordering::Relaxed) {
+fn reserve_slot(inner: &PoolInner) -> bool {
+    inner
+        .total
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |total| {
+            (total < inner.max).then_some(total + 1)
+        })
+        .is_ok()
+}
+
+fn refill_loop(owner: Weak<PoolInner>) {
+    loop {
+        let Some(inner) = owner.upgrade() else {
+            return;
+        };
         let idle = inner.idle.lock().unwrap_or_else(|e| e.into_inner()).len();
-        let used = inner.in_use.load(Ordering::SeqCst);
-        if idle < inner.min
-            && idle + used < inner.max
-            && let Ok(slot) = mint_slot(&inner)
-        {
-            inner
-                .idle
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push(slot);
+        if idle < inner.min && reserve_slot(&inner) {
+            match mint_slot(&inner) {
+                Ok(slot) => inner
+                    .idle
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push(slot),
+                Err(_) => {
+                    inner.total.fetch_sub(1, Ordering::SeqCst);
+                }
+            }
         }
+        drop(inner);
         thread::sleep(Duration::from_millis(5));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{EngineBuilder, RestoreStrategy, ToyExecutor, snap_guest_wizer};
+
+    #[test]
+    fn refill_worker_releases_the_last_pool_owner() {
+        let facade = EngineBuilder::new().build().expect("engine");
+        let module = facade
+            .load_wasm_bytes(snap_guest_wizer())
+            .expect("snapshot module");
+        let exec = ToyExecutor::with_strategy(
+            facade,
+            module,
+            Duration::from_secs(2),
+            RestoreStrategy::Snapshot,
+        )
+        .expect("executor")
+        .with_pool(1, 2)
+        .expect("pool");
+        let owner = Arc::downgrade(&exec.pool().inner);
+
+        drop(exec);
+
+        for _ in 0..20 {
+            if owner.upgrade().is_none() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        panic!("refill worker retained the pool after its last owner was dropped");
     }
 }

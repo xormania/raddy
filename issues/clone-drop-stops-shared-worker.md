@@ -8,7 +8,8 @@ a background thread, so dropping one clone kills the worker for every handle.
 
 **What you see:** idle count stays 0 after spent slots; refill never runs.
 
-**Covered by:** `Drop` only signals stop when `Arc::strong_count == 1`.
+**Covered by:** the refill worker holds only a `Weak<PoolInner>`; the unit test
+proves the final owner can disappear while that worker is running.
 
-**Shape that fits the rest:** cloneable handles do not shut down shared
-workers until the last handle is gone.
+**Shape that fits the rest:** cloneable handles keep the pool alive; the worker
+exits once the last real owner is gone.

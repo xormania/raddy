@@ -190,7 +190,7 @@ fn guest_response(out: raddy_executor::ExecResponse) -> Response<RespBody> {
         }
     }
     let body = http_body_util::BodyExt::boxed(http_body_util::BodyExt::map_err(
-        GuestBody::new(out.body, out.done),
+        GuestBody::new(out.body, out.done, out.response_complete),
         std::convert::identity,
     ));
     builder.body(body).unwrap_or_else(|_| {

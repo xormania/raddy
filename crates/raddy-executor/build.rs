@@ -18,6 +18,7 @@ const GUESTS: &[&str] = &[
     "two_reads",
     "flood_write",
     "slow_echo",
+    "teardown_spin",
 ];
 
 fn main() {

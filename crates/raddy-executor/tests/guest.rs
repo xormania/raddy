@@ -49,6 +49,7 @@ async fn echo_guest_returns_head_and_body() {
     while let Some(chunk) = resp.body.recv().await {
         body.extend_from_slice(&chunk);
     }
+    let _ = resp.response_complete.send(());
     let text = String::from_utf8(body).expect("utf8");
     assert!(
         text.contains("/echo") && text.contains("hello"),

@@ -16,6 +16,7 @@ pub struct ToyExecutor {
     warm: InstanceSlot<Warm>,
     pool: InstancePool,
     deadline: Duration,
+    teardown_deadline: Duration,
 }
 
 impl std::fmt::Debug for ToyExecutor {
@@ -48,6 +49,10 @@ pub fn toy_guest_wasm(name: &str) -> Option<&'static [u8]> {
             "/flood_write.wasm"
         ))),
         "slow_echo" => Some(include_bytes!(concat!(env!("OUT_DIR"), "/slow_echo.wasm"))),
+        "teardown_spin" => Some(include_bytes!(concat!(
+            env!("OUT_DIR"),
+            "/teardown_spin.wasm"
+        ))),
         _ => None,
     }
 }
@@ -88,6 +93,7 @@ impl ToyExecutor {
             warm,
             pool,
             deadline,
+            teardown_deadline: Duration::from_secs(2),
         })
     }
 
@@ -104,6 +110,12 @@ impl ToyExecutor {
     #[must_use]
     pub fn with_deadline(mut self, deadline: Duration) -> Self {
         self.deadline = deadline;
+        self
+    }
+
+    #[must_use]
+    pub fn with_teardown_deadline(mut self, deadline: Duration) -> Self {
+        self.teardown_deadline = deadline;
         self
     }
 
@@ -133,18 +145,21 @@ impl Executor for ToyExecutor {
         let (body_tx, body_rx) = mpsc::channel(16);
         let (done_tx, done_rx) = oneshot::channel();
         let (tear_tx, tear_rx) = oneshot::channel();
+        let (response_tx, response_rx) = oneshot::channel();
 
         let deadline = self.deadline;
+        let teardown_deadline = self.teardown_deadline;
         let tick = self.warm.facade().epoch_tick();
         let head_json = JsonV1
             .encode_envelope(&req.head)
             .map_err(|err| ExecError::Protocol(err.to_string()))?;
         let body = req.body;
         let runtime = tokio::runtime::Handle::current();
+        let cleanup_runtime = runtime.clone();
 
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
-            let (result, stolen) = run_pooled(PooledJob {
+            let (result, mut stolen) = run_pooled(PooledJob {
                 stolen,
                 head_json,
                 body,
@@ -152,13 +167,21 @@ impl Executor for ToyExecutor {
                 head_tx,
                 body_tx,
                 deadline,
+                teardown_deadline,
                 tick,
             });
+            stolen.slot_mut().store.data_mut().finish_response();
+            cleanup_runtime.spawn(async move {
+                let _ = response_rx.await;
+                pool.note_response_done();
+                let teardown = tokio::task::spawn_blocking(move || {
+                    drop(stolen);
+                    pool.note_teardown();
+                    let _ = tear_tx.send(());
+                });
+                let _ = teardown.await;
+            });
             let _ = done_tx.send(result);
-            pool.note_response_done();
-            drop(stolen);
-            pool.note_teardown();
-            let _ = tear_tx.send(());
         });
 
         match head_rx.await {
@@ -166,15 +189,21 @@ impl Executor for ToyExecutor {
                 head,
                 body: body_rx,
                 done: done_rx,
+                response_complete: response_tx,
                 teardown: tear_rx,
             }),
-            Err(_) => match done_rx.await {
-                Ok(Err(err)) => Err(err),
-                Ok(Ok(())) => Err(ExecError::Protocol(
-                    "guest returned without emitting resp_head".into(),
-                )),
-                Err(_) => Err(ExecError::Trap("guest worker dropped".into())),
-            },
+            Err(_) => {
+                drop(response_tx);
+                let result = match done_rx.await {
+                    Ok(Err(err)) => Err(err),
+                    Ok(Ok(())) => Err(ExecError::Protocol(
+                        "guest returned without emitting resp_head".into(),
+                    )),
+                    Err(_) => Err(ExecError::Trap("guest worker dropped".into())),
+                };
+                let _ = tear_rx.await;
+                result
+            }
         }
     }
 }
@@ -187,6 +216,7 @@ struct PooledJob {
     head_tx: oneshot::Sender<raddy_abi::ResponseHead>,
     body_tx: mpsc::Sender<bytes::Bytes>,
     deadline: Duration,
+    teardown_deadline: Duration,
     tick: Duration,
 }
 
@@ -201,17 +231,35 @@ fn run_pooled(job: PooledJob) -> (Result<(), ExecError>, crate::pool::Stolen) {
         head_tx,
         body_tx,
         deadline,
+        teardown_deadline,
         tick,
     } = job;
+    stolen.slot_mut().store.data_mut().rebind(
+        head_json,
+        body,
+        runtime,
+        head_tx,
+        body_tx,
+        deadline,
+        teardown_deadline,
+    );
     stolen
         .slot_mut()
         .store
-        .data_mut()
-        .rebind(head_json, body, runtime, head_tx, body_tx, deadline);
+        .set_epoch_deadline(deadline_ticks(deadline.min(teardown_deadline), tick));
     stolen
         .slot_mut()
         .store
-        .set_epoch_deadline(deadline_ticks(deadline, tick));
+        .epoch_deadline_callback(move |store| {
+            let window = store.data().epoch_window();
+            if window.is_zero() {
+                Ok(wasmtime::UpdateDeadline::Interrupt)
+            } else {
+                Ok(wasmtime::UpdateDeadline::Continue(deadline_ticks(
+                    window, tick,
+                )))
+            }
+        });
     let instance = stolen.slot_mut().instance;
     let call =
         match instance.get_typed_func::<(), i32>(&mut stolen.slot_mut().store, "raddy_execute") {
@@ -235,7 +283,11 @@ fn run_pooled(job: PooledJob) -> (Result<(), ExecError>, crate::pool::Stolen) {
         ))),
         Err(err) => {
             if is_epoch_interrupt(&err) {
-                Err(ExecError::DeadlinePreHead)
+                if proto == crate::Protocol::Ended {
+                    Ok(())
+                } else {
+                    Err(ExecError::DeadlinePreHead)
+                }
             } else {
                 Err(ExecError::Trap(err.to_string()))
             }

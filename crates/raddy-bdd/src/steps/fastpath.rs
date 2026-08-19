@@ -1,7 +1,10 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use cucumber::{given, then, when};
-use raddy_executor::{EngineBuilder, RestoreStrategy, ToyExecutor, snap_guest_wizer};
+use raddy_executor::{
+    EngineBuilder, RestoreStrategy, ToyExecutor, snap_guest_wizer, toy_guest_wasm,
+};
 use raddy_server::{ServerLimits, serve_tcp};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
@@ -24,13 +27,23 @@ fn snapshot_exec() -> ToyExecutor {
     .expect("executor")
 }
 
-#[given(regex = r#"^a snapshot server with pool_min (\d+) and pool_max (\d+)$"#)]
+#[given(regex = r#"^a slow pooled server with pool_min (\d+) and pool_max (\d+)$"#)]
 async fn start_pooled_server(world: &mut BddWorld, min: usize, max: usize) {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind ephemeral");
     let addr = listener.local_addr().expect("local addr");
-    let exec = snapshot_exec().with_pool(min, max).expect("pool");
+    let facade = EngineBuilder::new()
+        .epoch_tick(Duration::from_millis(10))
+        .build()
+        .expect("engine");
+    let module = facade
+        .load_wasm_bytes(toy_guest_wasm("slow_echo").expect("slow_echo guest"))
+        .expect("module");
+    let exec = ToyExecutor::new(facade, module, Duration::from_secs(2))
+        .expect("executor")
+        .with_pool(min, max)
+        .expect("pool");
     world.snapshot_exec = Some(exec.clone());
     let (tx, rx) = oneshot::channel();
     let limits = ServerLimits {
@@ -50,13 +63,49 @@ async fn start_pooled_server(world: &mut BddWorld, min: usize, max: usize) {
 #[when(regex = r#"^I GET \"([^\"]+)\" (\d+) times$"#)]
 async fn get_n_times(world: &mut BddWorld, path: String, n: usize) {
     let addr = world.server_addr.expect("server");
-    let mut last = (0, http::HeaderMap::new(), Vec::new());
+    let start = Arc::new(tokio::sync::Barrier::new(n));
+    let mut requests = tokio::task::JoinSet::new();
     for _ in 0..n {
-        last = exchange(addr, "GET", &path, None).await;
+        let path = path.clone();
+        let start = Arc::clone(&start);
+        requests.spawn(async move {
+            start.wait().await;
+            exchange(addr, "GET", &path, None).await
+        });
     }
+    let mut responses = Vec::with_capacity(n);
+    while let Some(result) = requests.join_next().await {
+        responses.push(result.expect("burst request task"));
+    }
+    assert_eq!(responses.len(), n, "one response per burst request");
+    world.burst_statuses = responses.iter().map(|response| response.0).collect();
+    let last = responses
+        .pop()
+        .expect("burst contains at least one request");
     world.last_status = Some(last.0);
     world.last_headers = Some(last.1);
     world.last_body = Some(String::from_utf8_lossy(&last.2).into_owned());
+}
+
+#[then(regex = r#"^all (\d+) HTTP statuses are (\d+)$"#)]
+async fn all_http_statuses(world: &mut BddWorld, count: usize, status: u16) {
+    assert_eq!(world.burst_statuses.len(), count);
+    assert!(
+        world.burst_statuses.iter().all(|got| *got == status),
+        "burst statuses {:?}, want every response to be {status}",
+        world.burst_statuses
+    );
+}
+
+#[then(expr = "the peak pool use exceeded pool_min")]
+async fn peak_exceeded_min(world: &mut BddWorld) {
+    let pool = world.snapshot_exec.as_ref().expect("pooled server").pool();
+    assert!(
+        pool.peak_in_use() > pool.min(),
+        "peak pool use {} did not exceed pool_min {}",
+        pool.peak_in_use(),
+        pool.min()
+    );
 }
 
 #[then(expr = "guest teardown completed after the response was fully sent")]

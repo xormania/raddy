@@ -20,9 +20,11 @@ pub(crate) struct HostState {
     read_so_far: usize,
     proto: Protocol,
     head_tx: Option<oneshot::Sender<ResponseHead>>,
-    body_tx: mpsc::Sender<Bytes>,
+    body_tx: Option<mpsc::Sender<Bytes>>,
     fail: Option<ExecError>,
     deadline_at: Instant,
+    teardown_deadline: Duration,
+    teardown_deadline_at: Option<Instant>,
     pub(crate) wasi: WasiP1Ctx,
 }
 
@@ -35,6 +37,7 @@ impl HostState {
         head_tx: oneshot::Sender<ResponseHead>,
         body_tx: mpsc::Sender<Bytes>,
         deadline: Duration,
+        teardown_deadline: Duration,
     ) -> Self {
         Self {
             head,
@@ -43,9 +46,11 @@ impl HostState {
             read_so_far: 0,
             proto: Protocol::AwaitHead,
             head_tx: Some(head_tx),
-            body_tx,
+            body_tx: Some(body_tx),
             fail: None,
             deadline_at: Instant::now() + deadline,
+            teardown_deadline,
+            teardown_deadline_at: None,
             wasi: WasiCtxBuilder::new()
                 .allow_blocking_current_thread(true)
                 .build_p1(),
@@ -62,9 +67,11 @@ impl HostState {
             read_so_far: 0,
             proto: Protocol::AwaitHead,
             head_tx: Some(head_tx),
-            body_tx,
+            body_tx: Some(body_tx),
             fail: None,
             deadline_at: Instant::now() + Duration::from_secs(30),
+            teardown_deadline: Duration::from_secs(2),
+            teardown_deadline_at: None,
             wasi: WasiCtxBuilder::new()
                 .allow_blocking_current_thread(true)
                 .build_p1(),
@@ -79,6 +86,7 @@ impl HostState {
         head_tx: oneshot::Sender<ResponseHead>,
         body_tx: mpsc::Sender<Bytes>,
         deadline: Duration,
+        teardown_deadline: Duration,
     ) {
         self.head = head;
         self.body = Mutex::new(body);
@@ -86,9 +94,11 @@ impl HostState {
         self.read_so_far = 0;
         self.proto = Protocol::AwaitHead;
         self.head_tx = Some(head_tx);
-        self.body_tx = body_tx;
+        self.body_tx = Some(body_tx);
         self.fail = None;
         self.deadline_at = Instant::now() + deadline;
+        self.teardown_deadline = teardown_deadline;
+        self.teardown_deadline_at = None;
         self.wasi = WasiCtxBuilder::new()
             .allow_blocking_current_thread(true)
             .build_p1();
@@ -100,6 +110,26 @@ impl HostState {
 
     pub(crate) fn protocol(&self) -> Protocol {
         self.proto
+    }
+
+    pub(crate) fn finish_response(&mut self) {
+        self.head_tx = None;
+        self.body_tx = None;
+    }
+
+    fn finish_body(&mut self) {
+        self.body_tx = None;
+        self.teardown_deadline_at = Some(Instant::now() + self.teardown_deadline);
+    }
+
+    pub(crate) fn execution_remaining(&self) -> Duration {
+        self.teardown_deadline_at
+            .unwrap_or(self.deadline_at)
+            .saturating_duration_since(Instant::now())
+    }
+
+    pub(crate) fn epoch_window(&self) -> Duration {
+        self.execution_remaining().min(self.teardown_deadline)
     }
 
     fn remaining(&self) -> Duration {
@@ -207,7 +237,9 @@ pub(crate) fn register(linker: &mut Linker<HostState>) -> Result<(), ExecError> 
             "raddy",
             "raddy_resp_end",
             |mut caller: Caller<'_, HostState>| {
-                caller.data_mut().apply(ProtoEvent::RespEnd)?;
+                let state = caller.data_mut();
+                state.apply(ProtoEvent::RespEnd)?;
+                state.finish_body();
                 Ok(0_i32)
             },
         )
@@ -264,7 +296,11 @@ fn send_chunk(caller: &mut Caller<'_, HostState>, bytes: Vec<u8>) -> Result<i32,
             .data_mut()
             .violate("deadline exceeded during resp_write");
     }
-    let tx = caller.data().body_tx.clone();
+    let tx = caller
+        .data()
+        .body_tx
+        .clone()
+        .ok_or_else(|| wasmtime::Error::msg("response body already ended"))?;
     let runtime = caller.data().runtime_handle()?;
     match runtime
         .block_on(async { tokio::time::timeout(remaining, tx.send(Bytes::from(bytes))).await })

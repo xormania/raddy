@@ -153,21 +153,33 @@ impl Executor for CgiExecutor {
         let (body_tx, body_rx) = mpsc::channel(16);
         let (done_tx, done_rx) = oneshot::channel();
         let (tear_tx, tear_rx) = oneshot::channel();
+        let (response_tx, response_rx) = oneshot::channel();
 
-        tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            let result = run_cgi(CgiJob {
-                engine,
-                pre,
-                app_dir,
-                env,
-                body,
-                tick,
-                deadline,
-                head_tx,
-                body_tx,
-            });
-            let _ = done_tx.send(result);
+        tokio::spawn(async move {
+            let worker = tokio::task::spawn_blocking(move || {
+                let _permit = permit;
+                run_cgi(CgiJob {
+                    engine,
+                    pre,
+                    app_dir,
+                    env,
+                    body,
+                    tick,
+                    deadline,
+                    head_tx,
+                    body_tx,
+                })
+            })
+            .await;
+            match worker {
+                Ok(result) => {
+                    let _ = done_tx.send(result);
+                }
+                Err(err) => {
+                    let _ = done_tx.send(Err(ExecError::Trap(format!("cgi worker failed: {err}"))));
+                }
+            }
+            let _ = response_rx.await;
             let _ = tear_tx.send(());
         });
 
@@ -176,15 +188,21 @@ impl Executor for CgiExecutor {
                 head,
                 body: body_rx,
                 done: done_rx,
+                response_complete: response_tx,
                 teardown: tear_rx,
             }),
-            Err(_) => match done_rx.await {
-                Ok(Err(err)) => Err(err),
-                Ok(Ok(())) => Err(ExecError::Protocol(
-                    "cgi guest returned without a response head".into(),
-                )),
-                Err(_) => Err(ExecError::Trap("cgi worker dropped".into())),
-            },
+            Err(_) => {
+                drop(response_tx);
+                let result = match done_rx.await {
+                    Ok(Err(err)) => Err(err),
+                    Ok(Ok(())) => Err(ExecError::Protocol(
+                        "cgi guest returned without a response head".into(),
+                    )),
+                    Err(_) => Err(ExecError::Trap("cgi worker dropped".into())),
+                };
+                let _ = tear_rx.await;
+                result
+            }
         }
     }
 }
