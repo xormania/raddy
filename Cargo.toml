@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/raddy",
+    "crates/raddy-config",
+    "crates/raddy-bdd",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+
+[workspace.dependencies]
+figment = { version = "0.10.19", features = ["toml", "env"] }
+tokio = { version = "1.53.1", default-features = false, features = ["macros", "rt-multi-thread"] }
+cucumber = "0.23.0"
+proptest = "1.11.0"
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.20"
+toml = "1.1.4"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 3

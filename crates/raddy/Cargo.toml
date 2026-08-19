@@ -1,0 +1,12 @@
+[package]
+name = "raddy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+raddy-config = { path = "../raddy-config" }
+
+[lints]
+workspace = true
