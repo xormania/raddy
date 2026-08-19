@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/raddy",
     "crates/raddy-config",
+    "crates/raddy-abi",
     "crates/raddy-bdd",
 ]
 
@@ -20,6 +21,8 @@ proptest = "1.11.0"
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.20"
 toml = "1.1.4"
+serde_json = "1.0.151"
+ulid = { version = "3.0.0", features = ["serde"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
