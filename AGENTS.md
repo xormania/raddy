@@ -46,8 +46,9 @@ Every session that writes to the tree:
    config. No `Co-Authored-By`. No generated-with footers.
 4. Once `justfile` exists, `just check` green before every commit that is not
    docs-only. Never commit red.
-5. Push the temp branch and open a PR **into `dev`**, authenticated as
-   **xor-machine** (xor-machine PAT / `gh` as xor-machine). Do not request
+5. Push the temp branch and open a PR **into `dev`** through the connected
+   GitHub integration authenticated as **xormania**. If that identity is
+   unavailable, stop; do not substitute another account. Do not request
    reviewers. Do not `@`-mention xormania for review.
 6. Stop. Do not approve. Do not merge. Do not push to `dev` or `master`.
    xormania takes over after the PR exists.
@@ -141,5 +142,5 @@ invalid, not passing.
 ```bash
 git status --short --branch
 # just check, once the justfile exists and Rust changed
-# PR into origin/dev as xor-machine; do not merge
+# PR into origin/dev as xormania; do not merge
 ```
