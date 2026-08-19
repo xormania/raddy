@@ -1,0 +1,7 @@
+WLR php/v8.2.6 patch lineage, vendored from
+https://github.com/vmware-labs/webassembly-language-runtimes
+tree 6e7674cf52edb8299bf34d4f7cb0a385c6ff728d (main, 2024-05-31).
+Apache-2.0.
+
+Stock wasm pin: php-cgi.lock (release php/8.2.6+20230714-11be424).
+Custom SAPI + raddy ext is not this tree's build (ADR 0008).

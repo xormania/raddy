@@ -8,9 +8,11 @@ publish.workspace = true
 [dependencies]
 bytes.workspace = true
 raddy-abi = { path = "../raddy-abi" }
+raddy-artifact = { path = "../raddy-artifact" }
 thiserror.workspace = true
 tokio.workspace = true
 wasmtime.workspace = true
+wasmtime-wasi.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true }

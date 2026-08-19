@@ -1,0 +1,207 @@
+# Same gate as `just check`. Guest C (Stage 1+) needs wasi-sdk 33.
+name: check
+
+on:
+  pull_request:
+    branches: [dev, master]
+  push:
+    branches: [dev, master]
+
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      WASI_SDK_PATH: ${{ github.workspace }}/.wasi-sdk
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - name: Check formatting early
+        run: cargo fmt --check
+
+      - name: Restore pinned build tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/bin/just
+            ~/.local/bin/wasmtime
+            ~/.local/bin/wizer
+            ${{ env.WASI_SDK_PATH }}
+          key: build-tools-${{ runner.os }}-${{ runner.arch }}-just-1.58.0-wasmtime-47.0.3-wizer-11.0.3-wasi-sdk-33
+
+      - name: Add local tools to PATH
+        run: |
+          mkdir -p "${HOME}/.local/bin"
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+
+      - name: Install just
+        run: |
+          set -euo pipefail
+          ver=1.58.0
+          if [[ "$(just --version 2>/dev/null || true)" == "just ${ver}" ]]; then
+            exit 0
+          fi
+          curl -fsSL "https://github.com/casey/just/releases/download/${ver}/just-${ver}-x86_64-unknown-linux-musl.tar.gz" \
+            -o /tmp/just.tgz
+          tar -xzf /tmp/just.tgz -C /tmp just
+          install -m 0755 /tmp/just "${HOME}/.local/bin/just"
+
+      - name: Install Wizer 11.0.3
+        run: |
+          set -euo pipefail
+          ver=v11.0.3
+          if [[ -x "${HOME}/.local/bin/wizer" ]]; then
+            exit 0
+          fi
+          curl -fsSL "https://github.com/bytecodealliance/wizer/releases/download/${ver}/wizer-${ver}-x86_64-linux.tar.xz" \
+            -o /tmp/wizer.tar.xz
+          tar -xJf /tmp/wizer.tar.xz -C /tmp
+          install -m 0755 /tmp/wizer-${ver}-x86_64-linux/wizer "${HOME}/.local/bin/wizer"
+
+      - name: Install Wasmtime 47.0.3
+        run: |
+          set -euo pipefail
+          ver=v47.0.3
+          if [[ "$(wasmtime --version 2>/dev/null || true)" == wasmtime\ 47.0.3* ]]; then
+            exit 0
+          fi
+          curl -fsSL "https://github.com/bytecodealliance/wasmtime/releases/download/${ver}/wasmtime-${ver}-x86_64-linux.tar.xz" \
+            -o /tmp/wasmtime.tar.xz
+          tar -xJf /tmp/wasmtime.tar.xz -C /tmp
+          install -m 0755 /tmp/wasmtime-${ver}-x86_64-linux/wasmtime "${HOME}/.local/bin/wasmtime"
+
+      - name: Install wasi-sdk 33
+        run: |
+          set -euo pipefail
+          if [[ -x "${WASI_SDK_PATH}/bin/clang" ]] \
+            && "${WASI_SDK_PATH}/bin/clang" --version | grep -q wasi-sdk; then
+            exit 0
+          fi
+          url="https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-33/wasi-sdk-33.0-x86_64-linux.tar.gz"
+          curl -fsSL "$url" -o /tmp/wasi-sdk.tar.gz
+          mkdir -p "${WASI_SDK_PATH}"
+          tar -xzf /tmp/wasi-sdk.tar.gz --strip-components=1 -C "${WASI_SDK_PATH}"
+          ver="$("${WASI_SDK_PATH}/bin/clang" --version)"
+          echo "$ver"
+          echo "$ver" | grep -q wasi-sdk
+
+      - name: Restore Rust and guest caches
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-directories: guest/php/out
+          key: php-${{ hashFiles('guest/php/php-cgi.lock') }}
+
+      - name: Build the production artifact
+        run: just artifact hello-symfony
+
+      - name: just check
+        run: just check
+
+      - name: Smoke-test the production artifact
+        run: |
+          set -euo pipefail
+          cargo build -p raddy
+
+          port="$(python3 -c 'import socket; sock = socket.socket(); sock.bind(("127.0.0.1", 0)); print(sock.getsockname()[1]); sock.close()')"
+          log="$(mktemp)"
+          pid=""
+          cleanup() {
+            if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+              kill -TERM "${pid}" 2>/dev/null || true
+              sleep 1
+              kill -KILL "${pid}" 2>/dev/null || true
+            fi
+            if [[ -n "${pid}" ]]; then
+              wait "${pid}" 2>/dev/null || true
+            fi
+            rm -f "${log}"
+          }
+          trap cleanup EXIT
+
+          target/debug/raddy --listen "127.0.0.1:${port}" >"${log}" 2>&1 &
+          pid=$!
+          ready=false
+          body=""
+          for _ in {1..100}; do
+            if ! kill -0 "${pid}" 2>/dev/null; then
+              echo "raddy exited before becoming ready" >&2
+              cat "${log}" >&2
+              exit 1
+            fi
+            if body="$(curl --fail --silent --max-time 1 "http://127.0.0.1:${port}/hello?name=ci")"; then
+              ready=true
+              break
+            fi
+            sleep 0.1
+          done
+          if [[ "${ready}" != true ]]; then
+            echo "raddy did not become HTTP-ready" >&2
+            cat "${log}" >&2
+            exit 1
+          fi
+          if [[ "${body}" != "Hello ci" ]]; then
+            echo "unexpected smoke response body: ${body}" >&2
+            cat "${log}" >&2
+            exit 1
+          fi
+
+          kill -TERM "${pid}"
+          (sleep 10; kill -KILL "${pid}" 2>/dev/null || true) &
+          watchdog=$!
+          set +e
+          wait "${pid}"
+          status=$?
+          kill "${watchdog}" 2>/dev/null || true
+          wait "${watchdog}" 2>/dev/null || true
+          set -e
+          pid=""
+          if [[ ${status} -ne 0 ]]; then
+            echo "raddy did not shut down cleanly: ${status}" >&2
+            cat "${log}" >&2
+            exit 1
+          fi
+          trap - EXIT
+          rm -f "${log}"
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cargo-audit
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}-${{ runner.arch }}-0.22.2
+
+      - name: Install cargo-audit 0.22.2
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.local/bin"
+          if [[ ! -x "${HOME}/.local/bin/cargo-audit" ]]; then
+            curl -fsSL "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv0.22.2/cargo-audit-x86_64-unknown-linux-gnu-v0.22.2.tgz" \
+              -o /tmp/cargo-audit.tgz
+            tar -xzf /tmp/cargo-audit.tgz -C /tmp
+            install -m 0755 \
+              /tmp/cargo-audit-x86_64-unknown-linux-gnu-v0.22.2/cargo-audit \
+              "${HOME}/.local/bin/cargo-audit"
+          fi
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+
+      - name: Audit locked dependencies
+        run: cargo audit

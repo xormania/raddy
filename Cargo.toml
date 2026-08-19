@@ -5,7 +5,9 @@ members = [
     "crates/raddy-config",
     "crates/raddy-abi",
     "crates/raddy-executor",
+    "crates/raddy-server",
     "crates/raddy-bdd",
+    "crates/raddy-artifact",
 ]
 
 [workspace.package]
@@ -16,9 +18,10 @@ publish = false
 
 [workspace.dependencies]
 figment = { version = "0.10.19", features = ["toml", "env"] }
-tokio = { version = "1.53.1", default-features = false, features = ["macros", "rt-multi-thread", "io-util", "sync"] }
+tokio = { version = "1.53.1", default-features = false, features = ["macros", "rt-multi-thread", "io-util", "sync", "time", "net", "signal"] }
 bytes = "1.12.1"
 wasmtime = "47.0.3"
+wasmtime-wasi = "47.0.3"
 cucumber = "0.23.0"
 proptest = "1.11.0"
 serde = { version = "1.0.229", features = ["derive"] }

@@ -1,28 +1,36 @@
 //! Wasmtime pipeline: engine facade, typestate slots, and the `Executor` port.
 
 mod body;
+mod cgi;
+mod cgi_parse;
 mod engine;
 mod error;
+mod guest_sdk;
 mod host;
+mod limits;
 mod mock;
+mod pool;
 mod proto;
 mod slot;
 mod toy;
 
-pub use body::MemoryBody;
-pub use engine::{EngineBuilder, EngineFacade};
+pub use body::{MemoryBody, OpenBody};
+pub use cgi::{CgiExecutor, PhpExecutor, discover_repo_path};
+pub use cgi_parse::{CgiParsed, parse_cgi_response};
+pub use engine::{EngineBuilder, EngineFacade, WASMTIME_VERSION, host_target};
 pub use error::ExecError;
+pub use guest_sdk::is_wasi_sdk_33;
+pub use limits::{MAX_REQ_BODY_BYTES, MAX_RESP_CHUNK_BYTES, MAX_RESP_HEAD_BYTES};
 pub use mock::MockCapabilities;
+pub use pool::{InstancePool, Stolen};
 pub use proto::{ProtoEvent, Protocol};
 pub use slot::{Cold, Executing, InstanceSlot, Warm};
-pub use toy::{ToyExecutor, toy_guest_wasm};
+pub use toy::{ToyExecutor, snap_guest_raw, snap_guest_wizer, toy_guest_wasm};
 
 use std::future::Future;
 
-use bytes::Bytes;
 use raddy_abi::{Envelope, ResponseHead};
 use tokio::io::AsyncRead;
-use tokio::sync::mpsc;
 
 /// One request handed to an [`Executor`].
 pub struct ExecRequest {
@@ -34,7 +42,13 @@ pub struct ExecRequest {
 pub struct ExecResponse {
     pub head: ResponseHead,
     /// Closed by the executor when the guest calls `raddy_resp_end`.
-    pub body: mpsc::Receiver<Bytes>,
+    pub body: tokio::sync::mpsc::Receiver<bytes::Bytes>,
+    /// Completes when the worker finishes. `Ok(())` only on a clean end.
+    pub done: tokio::sync::oneshot::Receiver<Result<(), ExecError>>,
+    /// The response adapter sends this after the body reaches its consumer.
+    pub response_complete: tokio::sync::oneshot::Sender<()>,
+    /// Completes after the spent instance is dropped.
+    pub teardown: tokio::sync::oneshot::Receiver<()>,
 }
 
 impl std::fmt::Debug for ExecRequest {
@@ -51,6 +65,9 @@ impl std::fmt::Debug for ExecResponse {
         f.debug_struct("ExecResponse")
             .field("head", &self.head)
             .field("body", &"<channel>")
+            .field("done", &"<oneshot>")
+            .field("response_complete", &"<oneshot>")
+            .field("teardown", &"<oneshot>")
             .finish()
     }
 }
@@ -67,4 +84,5 @@ pub trait Executor: Send + Sync + 'static {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RestoreStrategy {
     Fresh,
+    Snapshot,
 }

@@ -2,8 +2,10 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::time::Duration;
 
-use raddy_config::{CliOverrides, EnvSource, FileSource, LoadRequest};
+use raddy_config::{CliOverrides, Config, EnvSource, FileSource, LoadRequest};
+use raddy_server::{ServerLimits, serve};
 
 /// Result of one in-process invocation of the `raddy` CLI surface.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,11 +57,7 @@ fn invoke_inner(args: &[String], env: &BTreeMap<String, String>) -> Result<Invoc
         });
     }
 
-    Ok(Invocation {
-        stdout: String::new(),
-        stderr: "raddy: HTTP server is not implemented yet\n".into(),
-        exit_code: 2,
-    })
+    Err("raddy: use run_server for HTTP (async)".into())
 }
 
 #[derive(Debug, Default)]
@@ -129,4 +127,85 @@ pub fn run_from_process() -> Invocation {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let env: BTreeMap<String, String> = std::env::vars().collect();
     invoke(&args, &env)
+}
+
+/// Load config from process args/env the same way as [`invoke`].
+pub fn load_from_process() -> Result<Config, String> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let env: BTreeMap<String, String> = std::env::vars().collect();
+    let parsed = parse_args(&args)?;
+    let file = match parsed.config {
+        Some(path) => FileSource::Required(path),
+        None => FileSource::Optional(PathBuf::from("raddy.toml")),
+    };
+    raddy_config::load(LoadRequest {
+        file,
+        env: EnvSource::Map(env.clone()),
+        cli: parsed.overrides,
+        secrets: env,
+    })
+    .map_err(|err| err.to_string())
+}
+
+/// Bind the configured listener and serve the hello-symfony snapshot.
+pub async fn run_http(cfg: Config) -> Result<(), String> {
+    let exec = build_executor(&cfg)?;
+    let limits = ServerLimits {
+        concurrency: cfg.server.concurrency as usize,
+        request_timeout: Duration::from_millis(cfg.server.request_timeout_ms.get()),
+    };
+    serve(cfg.server.listen, exec, limits, shutdown_signal())
+        .await
+        .map_err(|err| err.to_string())
+}
+
+/// Build the production snapshot executor from the configured artifact and pool limits.
+pub fn build_executor(cfg: &Config) -> Result<raddy_executor::ToyExecutor, String> {
+    let facade = raddy_executor::EngineBuilder::new()
+        .epoch_tick(Duration::from_millis(cfg.executor.epoch_tick_ms.get()))
+        .build()
+        .map_err(|err| err.to_string())?;
+    let artifact = raddy_artifact::load_artifact(
+        &cfg.executor.artifact,
+        &raddy_executor::host_target(),
+        raddy_executor::WASMTIME_VERSION,
+    )
+    .map_err(|err| err.to_string())?;
+    let module = facade
+        .load_verified_artifact(artifact)
+        .map_err(|err| err.to_string())?;
+    raddy_executor::ToyExecutor::with_strategy(
+        facade,
+        module,
+        Duration::from_millis(cfg.executor.deadline_ms.get()),
+        raddy_executor::RestoreStrategy::Snapshot,
+    )
+    .map_err(|err| err.to_string())?
+    .with_pool(
+        cfg.executor.pool_min as usize,
+        cfg.executor.pool_max as usize,
+    )
+    .map(|exec| {
+        exec.with_teardown_deadline(Duration::from_millis(
+            cfg.executor.teardown_deadline_ms.get(),
+        ))
+    })
+    .map_err(|err| err.to_string())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = tokio::signal::ctrl_c();
+    #[cfg(unix)]
+    {
+        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("SIGTERM handler");
+        tokio::select! {
+            _ = ctrl_c => {}
+            _ = term.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = ctrl_c.await;
+    }
 }

@@ -208,8 +208,8 @@ const SECTIONS: &[Section] = &[
 ///
 /// Split-on-every-`_` is wrong for fields that themselves contain underscores
 /// (`request_timeout_ms`). Section prefixes are matched first; the remainder is
-/// the field name. `RADDY_*` keys that are not config-shaped are ignored so a
-/// harness variable like `RADDY_BDD_STAGE` does not fail a load.
+/// the field name. Any other `RADDY_*` key is unknown (C5). The BDD slice
+/// selector is `BDD_STAGE`, outside this prefix.
 fn parse_raddy_key(key: &str) -> Result<Option<Vec<String>>, ConfigError> {
     let Some(rest) = key.strip_prefix("RADDY_") else {
         return Ok(None);
@@ -237,7 +237,7 @@ fn parse_raddy_key(key: &str) -> Result<Option<Vec<String>>, ConfigError> {
         return Err(ConfigError::UnknownKey(key.to_string()));
     }
 
-    Ok(None)
+    Err(ConfigError::UnknownKey(key.to_string()))
 }
 
 fn coerce_env_value(raw: &str) -> Value {

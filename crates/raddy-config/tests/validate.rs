@@ -49,3 +49,19 @@ fn env_indirection_resolves_string_values() {
     .expect("env: indirection with a present secret must load");
     assert_eq!(cfg.db["main"].url, resolved);
 }
+
+#[test]
+fn misspelled_env_section_is_rejected() {
+    let mut env = BTreeMap::new();
+    env.insert("RADDY_SEVRER_LISTEN".into(), "0.0.0.0:7777".into());
+    assert!(
+        env.contains_key("RADDY_SEVRER_LISTEN"),
+        "plant must land in the env map"
+    );
+    let err = load(LoadRequest {
+        env: raddy_config::EnvSource::Map(env),
+        ..LoadRequest::default()
+    })
+    .expect_err("unknown RADDY_* key must be a hard error");
+    assert!(err.to_string().contains("RADDY_SEVRER_LISTEN"), "got {err}");
+}

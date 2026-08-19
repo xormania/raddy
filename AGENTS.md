@@ -27,18 +27,45 @@ Keep files under ~400 lines.
 
 ## Git
 
-Local only. No remotes, no push, no force-push, no history rewrite.
+Remote: https://github.com/xormania/raddy
 
-Author and committer stay `xormania <127287135+xormania@users.noreply.github.com>`.
-Do not change git config. No tool names in branches, commits, or docs. No
-`Co-Authored-By`. No generated-with footers.
+| Branch | Role |
+|---|---|
+| `master` | Published line. Agents do not push here unless asked. |
+| `dev` | Integration line. Code enters `dev` **only** through pull requests. |
 
-`main` only. Conventional commits: `type(scope): summary` —
-`feat|fix|test|perf|refactor|build|docs|chore`; scope is the crate or area
-(`executor`, `abi`, `guest`, `bdd`, `repo`, …). Body is the decision and why.
+### Agent workflow
 
-Once `justfile` exists, `just check` green before every commit that is not
-docs-only. Never commit red.
+Every session that writes to the tree:
+
+1. `git fetch origin` and start from `origin/dev`.
+2. Create a temporary branch from that tip: `type/short-slug` (same types as
+   commits). No tool names in the branch name.
+3. Author and committer stay
+   `xormania <127287135+xormania@users.noreply.github.com>`. Do not change git
+   config. No `Co-Authored-By`. No generated-with footers.
+4. Once `justfile` exists, `just check` green before every commit that is not
+   docs-only. Never commit red.
+5. Push the temp branch and open a draft PR **into `dev`** through a GitHub write
+   path whose resulting visible author is **xormania**, then verify that author.
+   Credentials and transport authentication are separate from attribution; do
+   not change working credentials merely to make their labels match. If no
+   available write path produces xormania attribution, stop. Do not request
+   reviewers. Do not `@`-mention xormania for review.
+6. Stop. Do not approve. Do not merge. Do not push to `dev` or `master`.
+   xormania takes over after the PR exists.
+
+No force-push. No history rewrite. No amending a commit that is already on a
+remote branch. Do not create GitHub tags (`stage-*`, `v*`, or otherwise).
+Existing `stage-0` / `stage-1` tags are historical only (ADR 0003).
+
+`.github/CODEOWNERS` is `* @xormania`. That is the only required reviewer.
+
+Names and PR bodies: `CONTRIBUTING.md`. Commits stay `type(scope): summary`.
+PR titles are `Label: summary` (`Docs:`, `CI:`, `Feat:`, …). PR bodies
+follow the Serena pattern: a tailored, self-contained review narrative with
+change-specific headings, explicit boundaries, and command-backed verification.
+Only the checklist template is fixed.
 
 ## Serena
 
@@ -69,13 +96,17 @@ just check          # fmt --check, clippy -D warnings, test --workspace
 just bdd-stage N    # that stage's Gherkin slice
 ```
 
+PRs into `dev` (and `master`) run the same `just check` in
+`.github/workflows/check.yml`. Guest C builds need `WASI_SDK_PATH`; CI
+installs wasi-sdk 33.
+
 Edition 2024. Commit `Cargo.lock`. Pin the toolchain in `rust-toolchain.toml`
 in the same change as the workspace is created. Never invent a crates.io
 version — `cargo add`. Std first. No `unsafe` unless a stage requires it.
 No tokio extra features beyond what the plan names.
 
-Guest PHP is built in Docker via `just guest-php` (wasi-sdk 33). Host PHP is
-not required for Stages 0–2. Wizer is the CLI (`wizer --version` → 11.0.3).
+Guest PHP for Stage 3 is stock WLR `php-cgi` via `just guest-php` (ADR 0008).
+Host PHP is not required. Wizer is the CLI (`wizer --version` → 11.0.3).
 wasmtime crate pin is 47.0.3; 48.0 LTS is adopted in Stage 1 only if published,
 via ADR.
 
@@ -114,4 +145,5 @@ invalid, not passing.
 ```bash
 git status --short --branch
 # just check, once the justfile exists and Rust changed
+# PR into origin/dev as xormania; do not merge
 ```
