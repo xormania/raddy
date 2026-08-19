@@ -23,7 +23,7 @@ pub use limits::{MAX_REQ_BODY_BYTES, MAX_RESP_CHUNK_BYTES, MAX_RESP_HEAD_BYTES};
 pub use mock::MockCapabilities;
 pub use proto::{ProtoEvent, Protocol};
 pub use slot::{Cold, Executing, InstanceSlot, Warm};
-pub use toy::{ToyExecutor, toy_guest_wasm};
+pub use toy::{ToyExecutor, snap_guest_raw, snap_guest_wizer, toy_guest_wasm};
 
 use std::future::Future;
 
@@ -78,4 +78,5 @@ pub trait Executor: Send + Sync + 'static {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RestoreStrategy {
     Fresh,
+    Snapshot,
 }

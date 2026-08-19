@@ -53,6 +53,18 @@ pub fn toy_guest_wasm(name: &str) -> Option<&'static [u8]> {
     }
 }
 
+/// Pre-Wizer hello-symfony guest (has `wizer.initialize`).
+#[must_use]
+pub fn snap_guest_raw() -> &'static [u8] {
+    include_bytes!(concat!(env!("OUT_DIR"), "/hello_symfony_raw.wasm"))
+}
+
+/// Post-Wizer hello-symfony guest. Instantiation is resume.
+#[must_use]
+pub fn snap_guest_wizer() -> &'static [u8] {
+    include_bytes!(concat!(env!("OUT_DIR"), "/hello_symfony_wizer.wasm"))
+}
+
 impl ToyExecutor {
     pub fn new(
         facade: EngineFacade,

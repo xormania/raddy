@@ -20,4 +20,5 @@ pub struct BddWorld {
     pub last_headers: Option<http::HeaderMap>,
     pub first_byte: Option<u8>,
     pub more_after_first: Option<Vec<u8>>,
+    pub prior_body: Option<String>,
 }

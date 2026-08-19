@@ -40,6 +40,15 @@ jobs:
           install -m 0755 /tmp/just "${HOME}/.local/bin/just"
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
 
+      - name: Install Wizer 11.0.3
+        run: |
+          set -euo pipefail
+          ver=v11.0.3
+          curl -fsSL "https://github.com/bytecodealliance/wizer/releases/download/${ver}/wizer-${ver}-x86_64-linux.tar.xz" \
+            -o /tmp/wizer.tar.xz
+          tar -xJf /tmp/wizer.tar.xz -C /tmp
+          install -m 0755 /tmp/wizer-${ver}-x86_64-linux/wizer "${HOME}/.local/bin/wizer"
+
       - name: Install wasi-sdk 33
         run: |
           set -euo pipefail

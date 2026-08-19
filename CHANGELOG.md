@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Stage 4 snapshot resume: Wizer 11 over an ABI guest, `RestoreStrategy::Snapshot`,
+`raddy-artifact` manifests. `@stage-4` hello / entropy / REQUEST_TIME.
+Symfony-from-snapshot waits on the raddy SAPI (ADR 0009).
+
 Stage 3 PHP cold: `CgiExecutor` runs stock WLR `php-cgi-8.2.6.wasm`
 (`just guest-php`, ADR 0008). `@stage-3` hello, POST echo, Set-Cookie.
 Custom raddy SAPI is not this stage.

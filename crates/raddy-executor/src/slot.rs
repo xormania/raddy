@@ -67,9 +67,11 @@ impl InstanceSlot<Cold> {
 
     pub fn instantiate(self) -> Result<InstanceSlot<Warm>, ExecError> {
         match self.state.strategy {
-            RestoreStrategy::Fresh => {
+            RestoreStrategy::Fresh | RestoreStrategy::Snapshot => {
                 let mut linker = wasmtime::Linker::new(self.state.facade.engine());
                 crate::host::register(&mut linker)?;
+                wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |host| &mut host.wasi)
+                    .map_err(|err| ExecError::Artifact(err.to_string()))?;
                 let pre = linker
                     .instantiate_pre(&self.state.module)
                     .map_err(|err| ExecError::Artifact(err.to_string()))?;

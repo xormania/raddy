@@ -6,6 +6,8 @@ use raddy_abi::{HeadCodec, JsonV1, ResponseHead};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::sync::{mpsc, oneshot};
 use wasmtime::{Caller, Linker, Memory};
+use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime_wasi::p1::WasiP1Ctx;
 
 use crate::ExecError;
 use crate::limits::{MAX_REQ_BODY_BYTES, MAX_RESP_CHUNK_BYTES, MAX_RESP_HEAD_BYTES};
@@ -21,6 +23,7 @@ pub(crate) struct HostState {
     body_tx: mpsc::Sender<Bytes>,
     fail: Option<ExecError>,
     deadline_at: Instant,
+    pub(crate) wasi: WasiP1Ctx,
 }
 
 impl HostState {
@@ -42,6 +45,9 @@ impl HostState {
             body_tx,
             fail: None,
             deadline_at: Instant::now() + deadline,
+            wasi: WasiCtxBuilder::new()
+                .allow_blocking_current_thread(true)
+                .build_p1(),
         }
     }
 
