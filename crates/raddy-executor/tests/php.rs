@@ -1,3 +1,4 @@
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use raddy_abi::{BodyMeta, Envelope, RequestId};
@@ -19,9 +20,14 @@ fn envelope(method: &str, target: &str, body_len: Option<u64>) -> Envelope {
 }
 
 fn load() -> PhpExecutor {
-    PhpExecutor::discover()
-        .unwrap_or_else(|err| panic!("php-cgi wasm missing; run `just guest-php`: {err}"))
-        .with_deadline(Duration::from_secs(10))
+    static EXECUTOR: OnceLock<PhpExecutor> = OnceLock::new();
+    EXECUTOR
+        .get_or_init(|| {
+            PhpExecutor::discover()
+                .unwrap_or_else(|err| panic!("php-cgi wasm missing; run `just guest-php`: {err}"))
+                .with_deadline(Duration::from_secs(10))
+        })
+        .clone()
 }
 
 async fn collect(exec: &PhpExecutor, method: &str, target: &str, body: Vec<u8>) -> (u16, Vec<u8>) {
