@@ -15,6 +15,16 @@ pub struct ArtifactManifest {
     #[serde(default)]
     pub capabilities: CapabilityMeta,
     pub limits: LimitsMeta,
+    #[serde(default)]
+    pub precompiled: std::collections::BTreeMap<String, PrecompiledMeta>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PrecompiledMeta {
+    pub cwasm: String,
+    pub wasmtime: String,
+    pub sha256: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,6 +74,15 @@ pub fn parse_manifest(toml_text: &str) -> Result<ArtifactManifest, ArtifactError
     {
         return Err(ArtifactError::Manifest(
             "module.sha256 must be 64 hex digits".into(),
+        ));
+    }
+    if parsed
+        .precompiled
+        .values()
+        .any(|item| item.sha256.len() != 64 || !item.sha256.bytes().all(|b| b.is_ascii_hexdigit()))
+    {
+        return Err(ArtifactError::Manifest(
+            "precompiled sha256 pins must be 64 hex digits".into(),
         ));
     }
     Ok(parsed)

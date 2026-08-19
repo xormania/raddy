@@ -49,6 +49,7 @@ async fn echo_guest_returns_head_and_body() {
     while let Some(chunk) = resp.body.recv().await {
         body.extend_from_slice(&chunk);
     }
+    let _ = resp.response_complete.send(());
     let text = String::from_utf8(body).expect("utf8");
     assert!(
         text.contains("/echo") && text.contains("hello"),
@@ -219,6 +220,7 @@ async fn known_oversize_body_is_rejected_without_buffering() {
 async fn saturated_admission_rejects_without_queueing() {
     let exec = load("spin")
         .with_workers(1)
+        .expect("workers")
         .with_deadline(Duration::from_secs(2));
     let busy = exec.clone();
     let handle = tokio::spawn(async move { busy.execute(req(MemoryBody::new(Vec::new()))).await });

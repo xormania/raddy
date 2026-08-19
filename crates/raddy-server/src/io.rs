@@ -59,17 +59,36 @@ impl AsyncRead for IncomingRead {
 pub struct GuestBody {
     rx: mpsc::Receiver<Bytes>,
     done: oneshot::Receiver<Result<(), ExecError>>,
+    response_complete: Option<oneshot::Sender<()>>,
     finished: bool,
 }
 
 impl GuestBody {
     #[must_use]
-    pub fn new(rx: mpsc::Receiver<Bytes>, done: oneshot::Receiver<Result<(), ExecError>>) -> Self {
+    pub fn new(
+        rx: mpsc::Receiver<Bytes>,
+        done: oneshot::Receiver<Result<(), ExecError>>,
+        response_complete: oneshot::Sender<()>,
+    ) -> Self {
         Self {
             rx,
             done,
+            response_complete: Some(response_complete),
             finished: false,
         }
+    }
+
+    fn finish(&mut self) {
+        self.finished = true;
+        if let Some(response_complete) = self.response_complete.take() {
+            let _ = response_complete.send(());
+        }
+    }
+}
+
+impl Drop for GuestBody {
+    fn drop(&mut self) {
+        self.finish();
     }
 }
 
@@ -88,18 +107,18 @@ impl Body for GuestBody {
         match this.rx.poll_recv(cx) {
             Poll::Ready(Some(chunk)) => Poll::Ready(Some(Ok(Frame::data(chunk)))),
             Poll::Ready(None) => {
-                this.finished = true;
+                this.finish();
                 Poll::Ready(None)
             }
             Poll::Pending => match Pin::new(&mut this.done).poll(cx) {
                 Poll::Ready(Ok(Err(_))) => {
-                    this.finished = true;
+                    this.finish();
                     Poll::Ready(None)
                 }
                 Poll::Ready(Ok(Ok(()))) | Poll::Ready(Err(_)) => match this.rx.poll_recv(cx) {
                     Poll::Ready(Some(chunk)) => Poll::Ready(Some(Ok(Frame::data(chunk)))),
                     _ => {
-                        this.finished = true;
+                        this.finish();
                         Poll::Ready(None)
                     }
                 },

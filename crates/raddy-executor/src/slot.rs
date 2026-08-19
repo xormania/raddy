@@ -92,6 +92,12 @@ impl InstanceSlot<Warm> {
         &self.state.facade
     }
 
+    #[must_use]
+    pub(crate) fn pre(&self) -> &wasmtime::InstancePre<crate::host::HostState> {
+        &self.state.pre
+    }
+
+    #[allow(dead_code)]
     pub(crate) fn begin(
         &self,
         host: HostState,
@@ -132,7 +138,7 @@ impl InstanceSlot<Executing> {
     pub fn finish(self) {}
 }
 
-fn deadline_ticks(deadline: Duration, tick: Duration) -> u64 {
+pub(crate) fn deadline_ticks(deadline: Duration, tick: Duration) -> u64 {
     let ticks = deadline.as_nanos() / tick.as_nanos().max(1);
     ticks.max(1) as u64
 }
@@ -146,7 +152,7 @@ mod tests {
     use super::InstanceSlot;
     use crate::RestoreStrategy;
     use crate::engine::EngineBuilder;
-    use crate::host::HostState;
+    use crate::host::{ExecutionDeadlines, HostState};
 
     #[tokio::test]
     async fn typestate_cold_warm_executing_finishes() {
@@ -165,7 +171,10 @@ mod tests {
             tokio::runtime::Handle::current(),
             head_tx,
             body_tx,
-            Duration::from_secs(1),
+            ExecutionDeadlines {
+                request: Duration::from_secs(1),
+                teardown: Duration::from_secs(1),
+            },
         );
         let exec = warm
             .begin(host, Duration::from_secs(1))

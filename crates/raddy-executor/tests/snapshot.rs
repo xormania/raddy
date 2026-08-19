@@ -51,6 +51,7 @@ async fn collect(exec: &ToyExecutor, target: &str) -> (u16, Vec<(String, String)
     while let Some(chunk) = resp.body.recv().await {
         body.extend_from_slice(&chunk);
     }
+    let _ = resp.response_complete.send(());
     resp.done.await.expect("done").expect("clean end");
     (status, headers, body)
 }
@@ -141,4 +142,17 @@ deadline_ms = 30000
     validate_module(&m, snap_guest_wizer()).expect("pin matches");
     let err = validate_module(&m, snap_guest_raw()).expect_err("raw is not the pin");
     assert!(err.to_string().contains("hash"));
+}
+
+#[allow(unsafe_code)]
+#[test]
+fn cwasm_round_trips_through_engine_facade() {
+    let facade = raddy_executor::EngineBuilder::new()
+        .epoch_tick(Duration::from_millis(10))
+        .build()
+        .expect("engine");
+    let compiled = facade.load_wasm_bytes(snap_guest_wizer()).expect("compile");
+    let cwasm = facade.serialize_module(&compiled).expect("serialize");
+    let loaded = unsafe { facade.load_cwasm_bytes(&cwasm) }.expect("deserialize");
+    let _ = loaded;
 }
