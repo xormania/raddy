@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use raddy_config::{CliOverrides, Config, EnvSource, FileSource, LoadRequest};
-use raddy_executor::{EngineBuilder, ToyExecutor, toy_guest_wasm};
 use raddy_server::{ServerLimits, serve};
 
 /// Result of one in-process invocation of the `raddy` CLI surface.
@@ -148,22 +147,11 @@ pub fn load_from_process() -> Result<Config, String> {
     .map_err(|err| err.to_string())
 }
 
-/// Bind the configured listener and serve the echo toy guest until a signal.
+/// Bind the configured listener and serve the PHP app until a signal.
 pub async fn run_http(cfg: Config) -> Result<(), String> {
-    let facade = EngineBuilder::new()
-        .epoch_tick(Duration::from_millis(cfg.executor.epoch_tick_ms.get()))
-        .build()
-        .map_err(|err| err.to_string())?;
-    let wasm = toy_guest_wasm("echo").ok_or("echo toy guest is not linked")?;
-    let module = facade
-        .load_wasm_bytes(wasm)
-        .map_err(|err| err.to_string())?;
-    let exec = ToyExecutor::new(
-        facade,
-        module,
-        Duration::from_millis(cfg.executor.deadline_ms.get()),
-    )
-    .map_err(|err| err.to_string())?;
+    let exec = raddy_executor::PhpExecutor::discover()
+        .map_err(|err| format!("{err}; run `just guest-php`"))?
+        .with_deadline(Duration::from_millis(cfg.executor.deadline_ms.get()));
     let limits = ServerLimits {
         concurrency: cfg.server.concurrency as usize,
         request_timeout: Duration::from_millis(cfg.server.request_timeout_ms.get()),

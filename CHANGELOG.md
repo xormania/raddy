@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Stage 3 PHP cold: `CgiExecutor` runs stock WLR `php-cgi-8.2.6.wasm`
+(`just guest-php`, ADR 0008). `@stage-3` hello, POST echo, Set-Cookie.
+Custom raddy SAPI is not this stage.
+
 Stage 2 HTTP ingress: `raddy-server` on hyper 1.11, envelope mapping, 503
 on saturation, streamed TTFB. `@stage-2` scenarios. No GitHub tag.
 

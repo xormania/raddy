@@ -4,6 +4,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 check:
+    just guest-php
     cargo fmt --check
     cargo clippy --workspace --all-targets -- --deny warnings
     cargo test --workspace
@@ -47,8 +48,30 @@ guest-toy:
 guest-php:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "TODO: just guest-php is implemented in stage 3" >&2
-    exit 1
+    lock=guest/php/php-cgi.lock
+    url=$(awk -F= '/^url=/{print $2}' "$lock")
+    want=$(awk -F= '/^sha256=/{print $2}' "$lock")
+    name=$(awk -F= '/^filename=/{print $2}' "$lock")
+    out=guest/php/out
+    mkdir -p "$out"
+    dest="$out/$name"
+    if [[ -f "$dest" ]]; then
+        got=$(sha256sum "$dest" | awk '{print $1}')
+        if [[ "$got" == "$want" ]]; then
+            echo "$dest already verified"
+            exit 0
+        fi
+        rm -f "$dest"
+    fi
+    curl -fsSL "$url" -o "$dest.part"
+    got=$(sha256sum "$dest.part" | awk '{print $1}')
+    if [[ "$got" != "$want" ]]; then
+        echo "sha256 mismatch: got $got want $want" >&2
+        rm -f "$dest.part"
+        exit 1
+    fi
+    mv "$dest.part" "$dest"
+    echo "fetched $dest"
 
 artifact NAME:
     #!/usr/bin/env bash

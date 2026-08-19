@@ -1,6 +1,8 @@
 //! Wasmtime pipeline: engine facade, typestate slots, and the `Executor` port.
 
 mod body;
+mod cgi;
+mod cgi_parse;
 mod engine;
 mod error;
 mod guest_sdk;
@@ -12,6 +14,8 @@ mod slot;
 mod toy;
 
 pub use body::{MemoryBody, OpenBody};
+pub use cgi::{CgiExecutor, PhpExecutor, discover_repo_path};
+pub use cgi_parse::{CgiParsed, parse_cgi_response};
 pub use engine::{EngineBuilder, EngineFacade};
 pub use error::ExecError;
 pub use guest_sdk::is_wasi_sdk_33;

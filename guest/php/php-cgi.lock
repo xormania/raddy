@@ -1,0 +1,5 @@
+# Stock WLR php-cgi used by CgiExecutor (ADR 0008).
+url=https://github.com/vmware-labs/webassembly-language-runtimes/releases/download/php/8.2.6%2B20230714-11be424/php-cgi-8.2.6.wasm
+sha256=edb29de7cd80597292670499846db56929af1166459c4a776ef606aef357c93b
+filename=php-cgi-8.2.6.wasm
+release=php/8.2.6+20230714-11be424
