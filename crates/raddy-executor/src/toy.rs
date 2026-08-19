@@ -1,21 +1,22 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use raddy_abi::{HeadCodec, JsonV1};
-use tokio::io::AsyncReadExt;
-use tokio::sync::{mpsc, oneshot};
-use wasmtime::{InstancePre, Linker, Module, Store};
+use tokio::sync::{Semaphore, mpsc, oneshot};
+use wasmtime::Module;
 
 use crate::engine::EngineFacade;
-use crate::host::{self, HostState};
-use crate::{ExecError, ExecRequest, ExecResponse, Executor};
+use crate::host::HostState;
+use crate::limits::MAX_REQ_BODY_BYTES;
+use crate::slot::InstanceSlot;
+use crate::{ExecError, ExecRequest, ExecResponse, Executor, RestoreStrategy, Warm};
 
-/// Runs a compiled toy (or any ABI-compatible) wasm module.
 /// Runs a compiled toy (or any ABI-compatible) wasm module.
 #[derive(Clone)]
 pub struct ToyExecutor {
-    facade: EngineFacade,
-    pre: InstancePre<HostState>,
+    warm: InstanceSlot<Warm>,
     deadline: Duration,
+    admission: Arc<Semaphore>,
 }
 
 impl std::fmt::Debug for ToyExecutor {
@@ -33,6 +34,20 @@ pub fn toy_guest_wasm(name: &str) -> Option<&'static [u8]> {
         "echo" => Some(include_bytes!(concat!(env!("OUT_DIR"), "/echo.wasm"))),
         "spin" => Some(include_bytes!(concat!(env!("OUT_DIR"), "/spin.wasm"))),
         "trap" => Some(include_bytes!(concat!(env!("OUT_DIR"), "/trap.wasm"))),
+        "no_end" => Some(include_bytes!(concat!(env!("OUT_DIR"), "/no_end.wasm"))),
+        "nonzero" => Some(include_bytes!(concat!(env!("OUT_DIR"), "/nonzero.wasm"))),
+        "bad_head" => Some(include_bytes!(concat!(env!("OUT_DIR"), "/bad_head.wasm"))),
+        "huge_len" => Some(include_bytes!(concat!(env!("OUT_DIR"), "/huge_len.wasm"))),
+        "oob_write" => Some(include_bytes!(concat!(env!("OUT_DIR"), "/oob_write.wasm"))),
+        "no_body_read" => Some(include_bytes!(concat!(
+            env!("OUT_DIR"),
+            "/no_body_read.wasm"
+        ))),
+        "two_reads" => Some(include_bytes!(concat!(env!("OUT_DIR"), "/two_reads.wasm"))),
+        "flood_write" => Some(include_bytes!(concat!(
+            env!("OUT_DIR"),
+            "/flood_write.wasm"
+        ))),
         _ => None,
     }
 }
@@ -43,15 +58,23 @@ impl ToyExecutor {
         module: Module,
         deadline: Duration,
     ) -> Result<Self, ExecError> {
-        let mut linker = Linker::new(facade.engine());
-        host::register(&mut linker)?;
-        let pre = linker
-            .instantiate_pre(&module)
-            .map_err(|err| ExecError::Artifact(err.to_string()))?;
+        Self::with_strategy(facade, module, deadline, RestoreStrategy::Fresh)
+    }
+
+    pub fn with_strategy(
+        facade: EngineFacade,
+        module: Module,
+        deadline: Duration,
+        strategy: RestoreStrategy,
+    ) -> Result<Self, ExecError> {
+        let warm = InstanceSlot::cold(facade, module, strategy).instantiate()?;
+        let workers = std::thread::available_parallelism()
+            .map(usize::from)
+            .unwrap_or(1);
         Ok(Self {
-            facade,
-            pre,
+            warm,
             deadline,
+            admission: Arc::new(Semaphore::new(workers)),
         })
     }
 
@@ -60,34 +83,53 @@ impl ToyExecutor {
         self.deadline = deadline;
         self
     }
+
+    #[must_use]
+    pub fn with_workers(self, n: usize) -> Self {
+        Self {
+            admission: Arc::new(Semaphore::new(n.max(1))),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn worker_limit(&self) -> usize {
+        self.admission.available_permits()
+    }
 }
 
 impl Executor for ToyExecutor {
     async fn execute(&self, req: ExecRequest) -> Result<ExecResponse, ExecError> {
+        if req
+            .head
+            .body
+            .len
+            .is_some_and(|n| n as usize > MAX_REQ_BODY_BYTES)
+        {
+            return Err(ExecError::Protocol("request body exceeds maximum".into()));
+        }
+
+        let permit = self
+            .admission
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| ExecError::Saturated)?;
+
         let (head_tx, head_rx) = oneshot::channel();
         let (body_tx, body_rx) = mpsc::channel(16);
         let (done_tx, done_rx) = oneshot::channel();
 
-        let pre = self.pre.clone();
-        let engine = self.facade.engine().clone();
-        let tick = self.facade.epoch_tick();
+        let warm = self.warm.clone();
         let deadline = self.deadline;
         let head_json = JsonV1
             .encode_envelope(&req.head)
             .map_err(|err| ExecError::Protocol(err.to_string()))?;
+        let body = req.body;
+        let runtime = tokio::runtime::Handle::current();
 
-        let mut body = req.body;
         tokio::task::spawn_blocking(move || {
-            let result = run_guest(GuestJob {
-                engine,
-                pre,
-                head_json,
-                body: &mut body,
-                head_tx,
-                body_tx,
-                tick,
-                deadline,
-            });
+            let _permit = permit;
+            let result = run_guest(warm, head_json, body, runtime, head_tx, body_tx, deadline);
             let _ = done_tx.send(result);
         });
 
@@ -95,6 +137,7 @@ impl Executor for ToyExecutor {
             Ok(head) => Ok(ExecResponse {
                 head,
                 body: body_rx,
+                done: done_rx,
             }),
             Err(_) => match done_rx.await {
                 Ok(Err(err)) => Err(err),
@@ -107,54 +150,30 @@ impl Executor for ToyExecutor {
     }
 }
 
-struct GuestJob<'a> {
-    engine: wasmtime::Engine,
-    pre: InstancePre<HostState>,
+fn run_guest(
+    warm: InstanceSlot<Warm>,
     head_json: Vec<u8>,
-    body: &'a mut (dyn tokio::io::AsyncRead + Send + Unpin),
+    body: Box<dyn tokio::io::AsyncRead + Send + Unpin>,
+    runtime: tokio::runtime::Handle,
     head_tx: oneshot::Sender<raddy_abi::ResponseHead>,
     body_tx: mpsc::Sender<bytes::Bytes>,
-    tick: Duration,
     deadline: Duration,
-}
-
-fn run_guest(job: GuestJob<'_>) -> Result<(), ExecError> {
-    let GuestJob {
-        engine,
-        pre,
-        head_json,
-        body,
-        head_tx,
-        body_tx,
-        tick,
-        deadline,
-    } = job;
-    let handle = tokio::runtime::Handle::current();
-    let mut body_bytes = Vec::new();
-    handle
-        .block_on(body.read_to_end(&mut body_bytes))
-        .map_err(|err| ExecError::Protocol(err.to_string()))?;
-
-    let mut store = Store::new(
-        &engine,
-        HostState::new(head_json, body_bytes, head_tx, body_tx),
-    );
-    let ticks = deadline_ticks(deadline, tick);
-    store.set_epoch_deadline(ticks);
-
-    let instance = pre
-        .instantiate(&mut store)
-        .map_err(|err| ExecError::Artifact(err.to_string()))?;
-    let exec = instance
-        .get_typed_func::<(), i32>(&mut store, "raddy_execute")
-        .map_err(|err| ExecError::Artifact(err.to_string()))?;
-
-    let call = exec.call(&mut store, ());
-    if let Some(fail) = store.data_mut().take_fail() {
+) -> Result<(), ExecError> {
+    let host = HostState::new(head_json, body, runtime, head_tx, body_tx, deadline);
+    let mut exec = warm.begin(host, deadline)?;
+    let call = exec.call_execute();
+    if let Some(fail) = exec.take_fail() {
+        exec.finish();
         return Err(fail);
     }
+    let proto = exec.protocol();
+    exec.finish();
     match call {
-        Ok(_) => Ok(()),
+        Ok(0) if proto == crate::Protocol::Ended => Ok(()),
+        Ok(0) => Err(ExecError::Protocol("missing resp_end".into())),
+        Ok(code) => Err(ExecError::Protocol(format!(
+            "raddy_execute returned {code}"
+        ))),
         Err(err) => {
             if is_epoch_interrupt(&err) {
                 Err(ExecError::DeadlinePreHead)
@@ -163,11 +182,6 @@ fn run_guest(job: GuestJob<'_>) -> Result<(), ExecError> {
             }
         }
     }
-}
-
-fn deadline_ticks(deadline: Duration, tick: Duration) -> u64 {
-    let ticks = deadline.as_nanos() / tick.as_nanos().max(1);
-    ticks.max(1) as u64
 }
 
 fn is_epoch_interrupt(err: &wasmtime::Error) -> bool {

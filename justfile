@@ -16,7 +16,7 @@ bdd:
 
 # Run one stage's Gherkin slice (`@stage-N`).
 bdd-stage N:
-    RADDY_BDD_STAGE={{N}} cargo test -p raddy-bdd --test bdd -- --nocapture
+    BDD_STAGE={{N}} cargo test -p raddy-bdd --test bdd -- --nocapture
 
 bench:
     #!/usr/bin/env bash
