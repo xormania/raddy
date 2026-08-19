@@ -27,18 +27,39 @@ Keep files under ~400 lines.
 
 ## Git
 
-Local only. No remotes, no push, no force-push, no history rewrite.
+Remote: https://github.com/xormania/raddy
 
-Author and committer stay `xormania <127287135+xormania@users.noreply.github.com>`.
-Do not change git config. No tool names in branches, commits, or docs. No
-`Co-Authored-By`. No generated-with footers.
+| Branch | Role |
+|---|---|
+| `master` | Published line. Agents do not push here unless asked. |
+| `dev` | Integration line. Code enters `dev` **only** through pull requests. |
 
-`main` only. Conventional commits: `type(scope): summary` —
+### Agent workflow
+
+Every session that writes to the tree:
+
+1. `git fetch origin` and start from `origin/dev`.
+2. Create a temporary branch from that tip: `type/short-slug` (same types as
+   commits). No tool names in the branch name.
+3. Author and committer stay
+   `xormania <127287135+xormania@users.noreply.github.com>`. Do not change git
+   config. No `Co-Authored-By`. No generated-with footers.
+4. Once `justfile` exists, `just check` green before every commit that is not
+   docs-only. Never commit red.
+5. Push the temp branch and open a PR **into `dev`**, authenticated as
+   **xor-machine** (xor-machine PAT / `gh` as xor-machine). Request review from
+   **xormania**.
+6. Stop. Do not approve. Do not merge. Do not push to `dev` or `master`. Only
+   **xormania** approves and merges.
+
+No force-push. No history rewrite. No amending a commit that is already on a
+remote branch.
+
+`.github/CODEOWNERS` is `* @xormania`. That is the only required reviewer.
+
+Conventional commits: `type(scope): summary` —
 `feat|fix|test|perf|refactor|build|docs|chore`; scope is the crate or area
 (`executor`, `abi`, `guest`, `bdd`, `repo`, …). Body is the decision and why.
-
-Once `justfile` exists, `just check` green before every commit that is not
-docs-only. Never commit red.
 
 ## Serena
 
@@ -114,4 +135,5 @@ invalid, not passing.
 ```bash
 git status --short --branch
 # just check, once the justfile exists and Rust changed
+# PR into origin/dev as xor-machine; do not merge
 ```
