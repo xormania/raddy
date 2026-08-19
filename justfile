@@ -76,8 +76,42 @@ guest-php:
 artifact NAME:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "TODO: artifact builder lands in stage 4 (asked for {{NAME}})" >&2
-    exit 1
+    : "${WASI_SDK_PATH:?WASI_SDK_PATH must point at a wasi-sdk 33 root}"
+    name={{NAME}}
+    if [[ "$name" != "hello-symfony" ]]; then
+        echo "unknown artifact $name" >&2
+        exit 1
+    fi
+    wizer_bin=${WIZER:-wizer}
+    out=artifacts/hello-symfony
+    mkdir -p "$out/app.fs"
+    raw=$(mktemp)
+    trap 'rm -f "$raw"' EXIT
+    "$WASI_SDK_PATH/bin/clang" --target=wasm32-wasip1 -nostdlib \
+        -Wl,--no-entry -Wl,--export=raddy_execute -Wl,--export-memory \
+        -Wl,--allow-undefined -fno-builtin -O2 \
+        -o "$raw" guest/apps/hello-symfony/guest.c
+    "$wizer_bin" -f wizer.initialize -o "$out/guest.wasm" "$raw"
+    sum=$(sha256sum "$out/guest.wasm" | awk '{print $1}')
+    {
+        echo '[artifact]'
+        echo 'name = "hello-symfony"'
+        echo 'version = "0.1.0"'
+        echo 'abi = 1'
+        echo
+        echo '[module]'
+        echo 'wasm = "guest.wasm"'
+        echo "sha256 = \"$sum\""
+        echo
+        echo '[app]'
+        echo 'fs = "app.fs/"'
+        echo
+        echo '[limits]'
+        echo 'memory_max_mib = 64'
+        echo 'deadline_ms = 30000'
+    } > "$out/raddy.artifact.toml"
+    cp guest/apps/hello-symfony/public/index.php "$out/app.fs/index.php"
+    echo "wrote $out (sha256 $sum)"
 
 run *ARGS:
     cargo run -p raddy -- {{ARGS}}

@@ -7,7 +7,9 @@ use http_body_util::{BodyExt, Empty, Full};
 use hyper::Request;
 use hyper::body::Incoming;
 use hyper_util::rt::TokioIo;
-use raddy_executor::{EngineBuilder, ToyExecutor, toy_guest_wasm};
+use raddy_executor::{
+    EngineBuilder, RestoreStrategy, ToyExecutor, snap_guest_wizer, toy_guest_wasm,
+};
 use raddy_server::{ServerLimits, serve_tcp};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
@@ -186,6 +188,87 @@ async fn set_cookie_order(world: &mut BddWorld, first: String, second: String) {
         .map(|v| v.to_str().expect("set-cookie utf8"))
         .collect();
     assert_eq!(got, [first.as_str(), second.as_str()]);
+}
+
+fn snapshot_exec() -> ToyExecutor {
+    let facade = EngineBuilder::new()
+        .epoch_tick(Duration::from_millis(10))
+        .build()
+        .expect("engine");
+    let module = facade.load_wasm_bytes(snap_guest_wizer()).expect("module");
+    ToyExecutor::with_strategy(
+        facade,
+        module,
+        Duration::from_secs(2),
+        RestoreStrategy::Snapshot,
+    )
+    .expect("executor")
+}
+
+#[given(expr = "a server on an ephemeral port serving the hello-symfony artifact")]
+async fn start_snapshot_server(world: &mut BddWorld) {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind ephemeral");
+    let addr = listener.local_addr().expect("local addr");
+    let exec = snapshot_exec();
+    let (tx, rx) = oneshot::channel();
+    let limits = ServerLimits {
+        concurrency: world.server_concurrency.unwrap_or(32),
+        request_timeout: Duration::from_secs(5),
+    };
+    tokio::spawn(async move {
+        let _ = serve_tcp(listener, exec, limits, async {
+            let _ = rx.await;
+        })
+        .await;
+    });
+    world.server_addr = Some(addr);
+    world.shutdown = Some(tx);
+}
+
+#[when(regex = r#"^I GET \"([^\"]+)\" twice$"#)]
+async fn get_twice(world: &mut BddWorld, path: String) {
+    let (status, headers, first) = exchange(world.addr(), "GET", &path, None).await;
+    let (_, _, second) = exchange(world.addr(), "GET", &path, None).await;
+    world.last_status = Some(status);
+    world.last_headers = Some(headers);
+    world.prior_body = Some(String::from_utf8_lossy(&first).into_owned());
+    world.last_body = Some(String::from_utf8_lossy(&second).into_owned());
+}
+
+#[then(expr = "the request was served by a resumed instance")]
+async fn resumed_instance(world: &mut BddWorld) {
+    let headers = world.last_headers.as_ref().expect("headers");
+    let got = headers
+        .get("x-raddy-restore")
+        .and_then(|v| v.to_str().ok())
+        .expect("x-raddy-restore");
+    assert_eq!(got, "snapshot");
+}
+
+#[then(expr = "the two response bodies differ")]
+async fn bodies_differ(world: &mut BddWorld) {
+    let a = world.prior_body.as_deref().expect("first body");
+    let b = world.last_body.as_deref().expect("second body");
+    assert_ne!(a, b, "bodies must differ, both {a:?}");
+}
+
+#[then(expr = "REQUEST_TIME is within 5 seconds of the host clock")]
+async fn request_time_near_host(world: &mut BddWorld) {
+    let headers = world.last_headers.as_ref().expect("headers");
+    let got: u64 = headers
+        .get("x-raddy-request-time")
+        .and_then(|v| v.to_str().ok())
+        .expect("x-raddy-request-time")
+        .parse()
+        .expect("unix seconds");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_secs();
+    let delta = now.abs_diff(got);
+    assert!(delta <= 5, "REQUEST_TIME {got} is {delta}s from host {now}");
 }
 
 impl BddWorld {

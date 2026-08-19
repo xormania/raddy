@@ -147,11 +147,22 @@ pub fn load_from_process() -> Result<Config, String> {
     .map_err(|err| err.to_string())
 }
 
-/// Bind the configured listener and serve the PHP app until a signal.
+/// Bind the configured listener and serve the hello-symfony snapshot.
 pub async fn run_http(cfg: Config) -> Result<(), String> {
-    let exec = raddy_executor::PhpExecutor::discover()
-        .map_err(|err| format!("{err}; run `just guest-php`"))?
-        .with_deadline(Duration::from_millis(cfg.executor.deadline_ms.get()));
+    let facade = raddy_executor::EngineBuilder::new()
+        .epoch_tick(Duration::from_millis(cfg.executor.epoch_tick_ms.get()))
+        .build()
+        .map_err(|err| err.to_string())?;
+    let module = facade
+        .load_wasm_bytes(raddy_executor::snap_guest_wizer())
+        .map_err(|err| err.to_string())?;
+    let exec = raddy_executor::ToyExecutor::with_strategy(
+        facade,
+        module,
+        Duration::from_millis(cfg.executor.deadline_ms.get()),
+        raddy_executor::RestoreStrategy::Snapshot,
+    )
+    .map_err(|err| err.to_string())?;
     let limits = ServerLimits {
         concurrency: cfg.server.concurrency as usize,
         request_timeout: Duration::from_millis(cfg.server.request_timeout_ms.get()),

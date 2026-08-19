@@ -65,4 +65,43 @@ fn main() {
             src.display()
         );
     }
+    build_hello_symfony(&clang, &out, &manifest);
+}
+
+fn build_hello_symfony(clang: &Path, out: &Path, manifest: &Path) {
+    let src = manifest.join("../../guest/apps/hello-symfony/guest.c");
+    println!("cargo:rerun-if-changed={}", src.display());
+    println!("cargo:rerun-if-env-changed=WIZER");
+    let raw = out.join("hello_symfony_raw.wasm");
+    let status = Command::new(clang)
+        .args([
+            "--target=wasm32-wasip1",
+            "-nostdlib",
+            "-Wl,--no-entry",
+            "-Wl,--export=raddy_execute",
+            "-Wl,--export-memory",
+            "-Wl,--allow-undefined",
+            "-fno-builtin",
+            "-O2",
+            "-o",
+        ])
+        .arg(&raw)
+        .arg(&src)
+        .status()
+        .unwrap_or_else(|err| panic!("clang snap guest: {err}"));
+    assert!(status.success(), "clang failed building {}", raw.display());
+
+    let wizer = env::var("WIZER").unwrap_or_else(|_| "wizer".into());
+    let snap = out.join("hello_symfony_wizer.wasm");
+    let status = Command::new(&wizer)
+        .args(["-f", "wizer.initialize", "-o"])
+        .arg(&snap)
+        .arg(&raw)
+        .status()
+        .unwrap_or_else(|err| panic!("WIZER must be the Wizer 11 CLI (set WIZER or PATH): {err}"));
+    assert!(
+        status.success(),
+        "wizer failed on {} (need Wizer 11.0.3)",
+        raw.display()
+    );
 }
