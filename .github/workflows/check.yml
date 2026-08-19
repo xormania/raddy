@@ -1,0 +1,44 @@
+# Same gate as `just check`. Guest C (Stage 1+) needs wasi-sdk 33.
+name: check
+
+on:
+  pull_request:
+    branches: [dev, master]
+  push:
+    branches: [dev, master]
+
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+      WASI_SDK_PATH: ${{ github.workspace }}/.wasi-sdk
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - name: Install just
+        run: |
+          curl -fsSL https://just.systems/install.sh | bash -s -- --to "${HOME}/.local/bin"
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+
+      - name: Install wasi-sdk 33
+        run: |
+          set -euo pipefail
+          url="https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-33/wasi-sdk-33.0-x86_64-linux.tar.gz"
+          curl -fsSL "$url" -o /tmp/wasi-sdk.tar.gz
+          mkdir -p "${WASI_SDK_PATH}"
+          tar -xzf /tmp/wasi-sdk.tar.gz --strip-components=1 -C "${WASI_SDK_PATH}"
+          "${WASI_SDK_PATH}/bin/clang" --version
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: just check
+        run: just check
