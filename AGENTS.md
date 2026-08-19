@@ -57,9 +57,10 @@ remote branch.
 
 `.github/CODEOWNERS` is `* @xormania`. That is the only required reviewer.
 
-Conventional commits: `type(scope): summary` —
-`feat|fix|test|perf|refactor|build|docs|chore`; scope is the crate or area
-(`executor`, `abi`, `guest`, `bdd`, `repo`, …). Body is the decision and why.
+Names and PR bodies: `CONTRIBUTING.md`. Commits stay `type(scope): summary`.
+PR titles are `Label: summary` (`Docs:`, `CI:`, `Feat:`, …). The PR body is
+Why / What / Background / Data / Checks — Data holds measured figures, or
+`none`.
 
 ## Serena
 
