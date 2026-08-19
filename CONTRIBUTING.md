@@ -2,7 +2,8 @@
 
 Code enters `dev` only through pull requests. `master` is the published line.
 Work starts from `origin/dev` on a temporary branch. Only **xormania** approves
-and merges. Agents open PRs as **xor-machine** and stop.
+and merges. Agents open PRs as **xor-machine** and stop. Do not request
+reviewers.
 
 `just check` is the gate. Green before every commit that is not docs-only.
 Never commit red. Never force-push. Never rewrite history.
