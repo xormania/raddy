@@ -1,3 +1,4 @@
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -21,6 +22,17 @@ fn toy(name: &str) -> ToyExecutor {
         .expect("engine");
     let module = facade.load_wasm_bytes(wasm).expect("module");
     ToyExecutor::new(facade, module, Duration::from_secs(2)).expect("executor")
+}
+
+fn php() -> raddy_executor::PhpExecutor {
+    static EXECUTOR: OnceLock<raddy_executor::PhpExecutor> = OnceLock::new();
+    EXECUTOR
+        .get_or_init(|| {
+            raddy_executor::PhpExecutor::discover()
+                .unwrap_or_else(|err| panic!("php-cgi wasm missing; run `just guest-php`: {err}"))
+                .with_deadline(Duration::from_secs(10))
+        })
+        .clone()
 }
 
 #[given(regex = r#"^the server concurrency is (\d+)$"#)]
@@ -143,9 +155,7 @@ async fn start_php_server(world: &mut BddWorld) {
         .await
         .expect("bind ephemeral");
     let addr = listener.local_addr().expect("local addr");
-    let exec = raddy_executor::PhpExecutor::discover()
-        .unwrap_or_else(|err| panic!("php-cgi wasm missing; run `just guest-php`: {err}"))
-        .with_deadline(Duration::from_secs(10));
+    let exec = php();
     let (tx, rx) = oneshot::channel();
     let limits = ServerLimits {
         concurrency: world.server_concurrency.unwrap_or(32),
