@@ -152,7 +152,7 @@ mod tests {
     use super::InstanceSlot;
     use crate::RestoreStrategy;
     use crate::engine::EngineBuilder;
-    use crate::host::HostState;
+    use crate::host::{ExecutionDeadlines, HostState};
 
     #[tokio::test]
     async fn typestate_cold_warm_executing_finishes() {
@@ -171,8 +171,10 @@ mod tests {
             tokio::runtime::Handle::current(),
             head_tx,
             body_tx,
-            Duration::from_secs(1),
-            Duration::from_secs(1),
+            ExecutionDeadlines {
+                request: Duration::from_secs(1),
+                teardown: Duration::from_secs(1),
+            },
         );
         let exec = warm
             .begin(host, Duration::from_secs(1))

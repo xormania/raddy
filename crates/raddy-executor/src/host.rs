@@ -28,6 +28,11 @@ pub(crate) struct HostState {
     pub(crate) wasi: WasiP1Ctx,
 }
 
+pub(crate) struct ExecutionDeadlines {
+    pub request: Duration,
+    pub teardown: Duration,
+}
+
 impl HostState {
     #[allow(dead_code)]
     pub(crate) fn new(
@@ -36,8 +41,7 @@ impl HostState {
         runtime: tokio::runtime::Handle,
         head_tx: oneshot::Sender<ResponseHead>,
         body_tx: mpsc::Sender<Bytes>,
-        deadline: Duration,
-        teardown_deadline: Duration,
+        deadlines: ExecutionDeadlines,
     ) -> Self {
         Self {
             head,
@@ -48,8 +52,8 @@ impl HostState {
             head_tx: Some(head_tx),
             body_tx: Some(body_tx),
             fail: None,
-            deadline_at: Instant::now() + deadline,
-            teardown_deadline,
+            deadline_at: Instant::now() + deadlines.request,
+            teardown_deadline: deadlines.teardown,
             teardown_deadline_at: None,
             wasi: WasiCtxBuilder::new()
                 .allow_blocking_current_thread(true)
@@ -85,8 +89,7 @@ impl HostState {
         runtime: tokio::runtime::Handle,
         head_tx: oneshot::Sender<ResponseHead>,
         body_tx: mpsc::Sender<Bytes>,
-        deadline: Duration,
-        teardown_deadline: Duration,
+        deadlines: ExecutionDeadlines,
     ) {
         self.head = head;
         self.body = Mutex::new(body);
@@ -96,8 +99,8 @@ impl HostState {
         self.head_tx = Some(head_tx);
         self.body_tx = Some(body_tx);
         self.fail = None;
-        self.deadline_at = Instant::now() + deadline;
-        self.teardown_deadline = teardown_deadline;
+        self.deadline_at = Instant::now() + deadlines.request;
+        self.teardown_deadline = deadlines.teardown;
         self.teardown_deadline_at = None;
         self.wasi = WasiCtxBuilder::new()
             .allow_blocking_current_thread(true)

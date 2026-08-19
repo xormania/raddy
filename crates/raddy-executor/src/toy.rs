@@ -5,6 +5,7 @@ use tokio::sync::{mpsc, oneshot};
 use wasmtime::Module;
 
 use crate::engine::EngineFacade;
+use crate::host::ExecutionDeadlines;
 use crate::limits::MAX_REQ_BODY_BYTES;
 use crate::pool::InstancePool;
 use crate::slot::InstanceSlot;
@@ -240,8 +241,10 @@ fn run_pooled(job: PooledJob) -> (Result<(), ExecError>, crate::pool::Stolen) {
         runtime,
         head_tx,
         body_tx,
-        deadline,
-        teardown_deadline,
+        ExecutionDeadlines {
+            request: deadline,
+            teardown: teardown_deadline,
+        },
     );
     stolen
         .slot_mut()
