@@ -90,6 +90,10 @@ just check          # fmt --check, clippy -D warnings, test --workspace
 just bdd-stage N    # that stage's Gherkin slice
 ```
 
+PRs into `dev` (and `master`) run the same `just check` in
+`.github/workflows/check.yml`. Guest C builds need `WASI_SDK_PATH`; CI
+installs wasi-sdk 33.
+
 Edition 2024. Commit `Cargo.lock`. Pin the toolchain in `rust-toolchain.toml`
 in the same change as the workspace is created. Never invent a crates.io
 version — `cargo add`. Std first. No `unsafe` unless a stage requires it.
