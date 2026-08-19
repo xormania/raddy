@@ -101,8 +101,8 @@ in the same change as the workspace is created. Never invent a crates.io
 version — `cargo add`. Std first. No `unsafe` unless a stage requires it.
 No tokio extra features beyond what the plan names.
 
-Guest PHP is built in Docker via `just guest-php` (wasi-sdk 33). Host PHP is
-not required for Stages 0–2. Wizer is the CLI (`wizer --version` → 11.0.3).
+Guest PHP for Stage 3 is stock WLR `php-cgi` via `just guest-php` (ADR 0008).
+Host PHP is not required. Wizer is the CLI (`wizer --version` → 11.0.3).
 wasmtime crate pin is 47.0.3; 48.0 LTS is adopted in Stage 1 only if published,
 via ADR.
 

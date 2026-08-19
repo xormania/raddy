@@ -137,6 +137,47 @@ async fn more_bytes(world: &mut BddWorld) {
     assert!(!rest.is_empty(), "only got first byte {first}");
 }
 
+#[given(expr = "a server on an ephemeral port serving the PHP app")]
+async fn start_php_server(world: &mut BddWorld) {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind ephemeral");
+    let addr = listener.local_addr().expect("local addr");
+    let exec = raddy_executor::PhpExecutor::discover()
+        .unwrap_or_else(|err| panic!("php-cgi wasm missing; run `just guest-php`: {err}"))
+        .with_deadline(Duration::from_secs(10));
+    let (tx, rx) = oneshot::channel();
+    let limits = ServerLimits {
+        concurrency: world.server_concurrency.unwrap_or(32),
+        request_timeout: Duration::from_secs(10),
+    };
+    tokio::spawn(async move {
+        let _ = serve_tcp(listener, exec, limits, async {
+            let _ = rx.await;
+        })
+        .await;
+    });
+    world.server_addr = Some(addr);
+    world.shutdown = Some(tx);
+}
+
+#[then(regex = r#"^the HTTP body is exactly \"([^\"]*)\"$"#)]
+async fn http_body_exact(world: &mut BddWorld, expected: String) {
+    let body = world.last_body.as_deref().expect("body");
+    assert_eq!(body, expected);
+}
+
+#[then(regex = r#"^the Set-Cookie headers are \"([^\"]+)\" then \"([^\"]+)\"$"#)]
+async fn set_cookie_order(world: &mut BddWorld, first: String, second: String) {
+    let headers = world.last_headers.as_ref().expect("headers");
+    let got: Vec<_> = headers
+        .get_all(http::header::SET_COOKIE)
+        .iter()
+        .map(|v| v.to_str().expect("set-cookie utf8"))
+        .collect();
+    assert_eq!(got, [first.as_str(), second.as_str()]);
+}
+
 impl BddWorld {
     fn addr(&self) -> std::net::SocketAddr {
         self.server_addr.expect("server must be started")
