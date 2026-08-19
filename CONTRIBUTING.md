@@ -2,9 +2,10 @@
 
 Code enters `dev` only through pull requests. `master` is the published line.
 Work starts from `origin/dev` on a temporary branch. Only **xormania** approves
-and merges. Agents open PRs through the connected GitHub integration as
-**xormania** and stop. If that identity is unavailable, stop rather than
-substitute another account. Do not request reviewers.
+and merges. Agents open PRs through a GitHub write path whose resulting visible
+author is **xormania**, verify that author, and stop. Credentials and transport
+authentication are separate from attribution and need not share its label. If no
+available path produces xormania attribution, stop. Do not request reviewers.
 
 `just check` is the gate. Green before every commit that is not docs-only.
 Never commit red. Never force-push. Never rewrite history. Do not create

@@ -46,9 +46,11 @@ Every session that writes to the tree:
    config. No `Co-Authored-By`. No generated-with footers.
 4. Once `justfile` exists, `just check` green before every commit that is not
    docs-only. Never commit red.
-5. Push the temp branch and open a PR **into `dev`** through the connected
-   GitHub integration authenticated as **xormania**. If that identity is
-   unavailable, stop; do not substitute another account. Do not request
+5. Push the temp branch and open a PR **into `dev`** through a GitHub write
+   path whose resulting visible author is **xormania**, then verify that author.
+   Credentials and transport authentication are separate from attribution; do
+   not change working credentials merely to make their labels match. If no
+   available write path produces xormania attribution, stop. Do not request
    reviewers. Do not `@`-mention xormania for review.
 6. Stop. Do not approve. Do not merge. Do not push to `dev` or `master`.
    xormania takes over after the PR exists.
