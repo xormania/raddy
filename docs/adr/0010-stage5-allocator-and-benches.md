@@ -38,6 +38,11 @@ engine facade.
   51,502/51,153 ns to 113,121/78,057 ns. These are an explicit one-time
   methodology/ownership baseline reset, not evidence that the old path stayed
   within 10%.
+- After removing an avoidable pre-head scheduling hop and isolating each
+  response sample from the preceding instance drop, seven fresh process runs
+  had medians of 1,149/74,687/56,590 ns. Against the original record, resume is
+  incomparable, warm e2e is 1.450x, and TTFB is 1.106x. Against the corrected
+  committed record, all three remain within the advisory gate.
 
 ## Consequences
 
