@@ -62,9 +62,10 @@ Existing `stage-0` / `stage-1` tags are historical only (ADR 0003).
 `.github/CODEOWNERS` is `* @xormania`. That is the only required reviewer.
 
 Names and PR bodies: `CONTRIBUTING.md`. Commits stay `type(scope): summary`.
-PR titles are `Label: summary` (`Docs:`, `CI:`, `Feat:`, …). The PR body is
-Why / What / Background / Data / Checks — Data holds measured figures, or
-`none`.
+PR titles are `Label: summary` (`Docs:`, `CI:`, `Feat:`, …). PR bodies
+follow the Serena pattern: a tailored, self-contained review narrative with
+change-specific headings, explicit boundaries, and command-backed verification.
+Only the checklist template is fixed.
 
 ## Serena
 
