@@ -1,23 +1,6 @@
-## Why
+## Checklist
 
-<!-- Problem or decision. Not a restatement of the title. -->
-
-## What
-
-<!-- Observable change. What did not change, if that is easy to miss. -->
-
-## Background
-
-<!-- Prior state, constraint, or rejected alternative. Or: none. -->
-
-## Data
-
-<!-- Command + the line that matters, or "none" and why. Figures are measured, not recalled. -->
-
-```
-$
-```
-
-## Checks
-
-<!-- What you ran. `just check` unless docs-only. -->
+- [ ] This PR is one logical change and started as a draft.
+- [ ] The body is self-contained and tailored to this change.
+- [ ] Verification names the exact commands or hosted evidence and their results.
+- [ ] `just check` is green, or the body explains why the change is docs-only.
