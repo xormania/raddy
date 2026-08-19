@@ -17,8 +17,9 @@ not land on `dev` by direct push.
 
 - Agents start from `origin/dev`, work on a temporary branch, and open a PR
   into `dev` as **xor-machine**.
-- Only **xormania** approves and merges. `.github/CODEOWNERS` is `* @xormania`.
-- Agents do not push to `dev` or `master`, do not approve, and do not merge.
+- Only **xormania** approves and merges.
+- Agents do not request reviewers, do not `@`-mention for review, do not
+  push to `dev` or `master`, do not approve, and do not merge.
 - No force-push and no history rewrite.
 
 This supersedes plan §6 for branching and remotes. Conventional commits, the

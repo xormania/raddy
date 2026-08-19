@@ -47,10 +47,10 @@ Every session that writes to the tree:
 4. Once `justfile` exists, `just check` green before every commit that is not
    docs-only. Never commit red.
 5. Push the temp branch and open a PR **into `dev`**, authenticated as
-   **xor-machine** (xor-machine PAT / `gh` as xor-machine). Request review from
-   **xormania**.
-6. Stop. Do not approve. Do not merge. Do not push to `dev` or `master`. Only
-   **xormania** approves and merges.
+   **xor-machine** (xor-machine PAT / `gh` as xor-machine). Do not request
+   reviewers. Do not `@`-mention xormania for review.
+6. Stop. Do not approve. Do not merge. Do not push to `dev` or `master`.
+   xormania takes over after the PR exists.
 
 No force-push. No history rewrite. No amending a commit that is already on a
 remote branch. Do not create GitHub tags (`stage-*`, `v*`, or otherwise).
