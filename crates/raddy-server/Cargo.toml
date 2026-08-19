@@ -1,0 +1,23 @@
+[package]
+name = "raddy-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+bytes.workspace = true
+http = "1.5.0"
+http-body = "1.1.0"
+http-body-util = "0.1.5"
+hyper = { version = "1.11.0", features = ["http1", "server"] }
+hyper-util = { version = "0.1.20", features = ["tokio", "server-auto", "http1", "service"] }
+raddy-abi = { path = "../raddy-abi" }
+raddy-executor = { path = "../raddy-executor" }
+thiserror.workspace = true
+tokio.workspace = true
+tower = { version = "0.5", features = ["limit", "timeout", "tokio", "util"] }
+tracing = "0.1.44"
+
+[lints]
+workspace = true

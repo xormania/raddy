@@ -17,6 +17,7 @@ const GUESTS: &[&str] = &[
     "no_body_read",
     "two_reads",
     "flood_write",
+    "slow_echo",
 ];
 
 fn main() {
