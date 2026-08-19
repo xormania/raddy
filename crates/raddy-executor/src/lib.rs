@@ -9,6 +9,7 @@ mod guest_sdk;
 mod host;
 mod limits;
 mod mock;
+mod pool;
 mod proto;
 mod slot;
 mod toy;
@@ -21,6 +22,7 @@ pub use error::ExecError;
 pub use guest_sdk::is_wasi_sdk_33;
 pub use limits::{MAX_REQ_BODY_BYTES, MAX_RESP_CHUNK_BYTES, MAX_RESP_HEAD_BYTES};
 pub use mock::MockCapabilities;
+pub use pool::{InstancePool, Stolen};
 pub use proto::{ProtoEvent, Protocol};
 pub use slot::{Cold, Executing, InstanceSlot, Warm};
 pub use toy::{ToyExecutor, snap_guest_raw, snap_guest_wizer, toy_guest_wasm};
@@ -45,6 +47,8 @@ pub struct ExecResponse {
     pub body: mpsc::Receiver<Bytes>,
     /// Completes when the worker finishes. `Ok(())` only on a clean end.
     pub done: tokio::sync::oneshot::Receiver<Result<(), ExecError>>,
+    /// Completes after the spent instance is dropped.
+    pub teardown: tokio::sync::oneshot::Receiver<()>,
 }
 
 impl std::fmt::Debug for ExecRequest {
@@ -62,6 +66,7 @@ impl std::fmt::Debug for ExecResponse {
             .field("head", &self.head)
             .field("body", &"<channel>")
             .field("done", &"<oneshot>")
+            .field("teardown", &"<oneshot>")
             .finish()
     }
 }

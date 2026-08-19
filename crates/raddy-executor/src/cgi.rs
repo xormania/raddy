@@ -152,6 +152,7 @@ impl Executor for CgiExecutor {
         let (head_tx, head_rx) = oneshot::channel();
         let (body_tx, body_rx) = mpsc::channel(16);
         let (done_tx, done_rx) = oneshot::channel();
+        let (tear_tx, tear_rx) = oneshot::channel();
 
         tokio::task::spawn_blocking(move || {
             let _permit = permit;
@@ -167,6 +168,7 @@ impl Executor for CgiExecutor {
                 body_tx,
             });
             let _ = done_tx.send(result);
+            let _ = tear_tx.send(());
         });
 
         match head_rx.await {
@@ -174,6 +176,7 @@ impl Executor for CgiExecutor {
                 head,
                 body: body_rx,
                 done: done_rx,
+                teardown: tear_rx,
             }),
             Err(_) => match done_rx.await {
                 Ok(Err(err)) => Err(err),

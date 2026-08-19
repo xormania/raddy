@@ -22,14 +22,17 @@ bdd-stage N:
 bench:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "TODO: criterion benches land in stage 5" >&2
-    exit 1
+    cargo run -p raddy-executor --release --example measure
 
 bench-check:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "TODO: bench-check lands in stage 5" >&2
-    exit 1
+    : "${WASI_SDK_PATH:?WASI_SDK_PATH must point at a wasi-sdk 33 root}"
+    tmp=$(mktemp)
+    trap 'rm -f "$tmp"' EXIT
+    cargo run -p raddy-executor --release --example measure --quiet > "$tmp"
+    cat "$tmp"
+    python3 scripts/bench-check.py bench/baselines.json "$tmp"
 
 guest-toy:
     #!/usr/bin/env bash
@@ -93,6 +96,16 @@ artifact NAME:
         -o "$raw" guest/apps/hello-symfony/guest.c
     "$wizer_bin" -f wizer.initialize -o "$out/guest.wasm" "$raw"
     sum=$(sha256sum "$out/guest.wasm" | awk '{print $1}')
+    wasmtime_bin=${WASMTIME:-wasmtime}
+    cwasm="$out/guest.$(uname -m)-unknown-linux-gnu.cwasm"
+    if command -v "$wasmtime_bin" >/dev/null; then
+        "$wasmtime_bin" compile -o "$cwasm" "$out/guest.wasm"
+        csum=$(sha256sum "$cwasm" | awk '{print $1}')
+        triple=$(uname -m)-unknown-linux-gnu
+    else
+        csum=
+        triple=
+    fi
     {
         echo '[artifact]'
         echo 'name = "hello-symfony"'
@@ -109,6 +122,13 @@ artifact NAME:
         echo '[limits]'
         echo 'memory_max_mib = 64'
         echo 'deadline_ms = 30000'
+        if [[ -n "$csum" ]]; then
+            echo
+            echo "[precompiled.$triple]"
+            echo "cwasm = \"$(basename "$cwasm")\""
+            echo 'wasmtime = "47.0.3"'
+            echo "sha256 = \"$csum\""
+        fi
     } > "$out/raddy.artifact.toml"
     cp guest/apps/hello-symfony/public/index.php "$out/app.fs/index.php"
     echo "wrote $out (sha256 $sum)"

@@ -113,14 +113,30 @@ impl EngineFacade {
         Module::from_binary(&self.engine, bytes).map_err(|err| ExecError::Artifact(err.to_string()))
     }
 
-    /// Deserialize a cwasm. Not public: provenance and mmap lifetime are not
-    /// proved here (audit RADDY-004). Stage 5's artifact loader will own this.
+    pub fn serialize_module(&self, module: &Module) -> Result<Vec<u8>, ExecError> {
+        module
+            .serialize()
+            .map_err(|err| ExecError::Artifact(err.to_string()))
+    }
+
+    /// Deserialize a cwasm produced by [`Self::serialize_module`] on this engine.
+    ///
+    /// # Safety
+    /// `bytes` must be unmodified output of this wasmtime version.
+    #[allow(unsafe_code)]
+    pub unsafe fn load_cwasm_bytes(&self, bytes: &[u8]) -> Result<Module, ExecError> {
+        // SAFETY: caller upholds the Wasmtime deserialize contract above.
+        unsafe { Module::deserialize(&self.engine, bytes) }
+            .map_err(|err| ExecError::Artifact(err.to_string()))
+    }
+
+    /// Deserialize a cwasm file produced by [`Self::serialize_module`].
     ///
     /// # Safety
     /// `path` must be unmodified bytes from this wasmtime version, and the file
     /// must remain unchanged for the lifetime of the returned `Module`.
-    #[allow(unsafe_code, dead_code)]
-    pub(crate) unsafe fn load_cwasm_file(&self, path: &Path) -> Result<Module, ExecError> {
+    #[allow(unsafe_code)]
+    pub unsafe fn load_cwasm_file(&self, path: &Path) -> Result<Module, ExecError> {
         // SAFETY: caller upholds the Wasmtime deserialize_file contract above.
         unsafe { Module::deserialize_file(&self.engine, path) }
             .map_err(|err| ExecError::Artifact(err.to_string()))

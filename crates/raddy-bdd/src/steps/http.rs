@@ -212,6 +212,7 @@ async fn start_snapshot_server(world: &mut BddWorld) {
         .expect("bind ephemeral");
     let addr = listener.local_addr().expect("local addr");
     let exec = snapshot_exec();
+    world.snapshot_exec = Some(exec.clone());
     let (tx, rx) = oneshot::channel();
     let limits = ServerLimits {
         concurrency: world.server_concurrency.unwrap_or(32),
@@ -277,7 +278,7 @@ impl BddWorld {
     }
 }
 
-async fn exchange(
+pub(crate) async fn exchange(
     addr: std::net::SocketAddr,
     method: &str,
     path: &str,

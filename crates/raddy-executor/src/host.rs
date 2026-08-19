@@ -16,7 +16,7 @@ use crate::proto::{ProtoEvent, Protocol};
 pub(crate) struct HostState {
     head: Vec<u8>,
     body: Mutex<Box<dyn AsyncRead + Send + Unpin>>,
-    runtime: tokio::runtime::Handle,
+    runtime: Option<tokio::runtime::Handle>,
     read_so_far: usize,
     proto: Protocol,
     head_tx: Option<oneshot::Sender<ResponseHead>>,
@@ -27,6 +27,7 @@ pub(crate) struct HostState {
 }
 
 impl HostState {
+    #[allow(dead_code)]
     pub(crate) fn new(
         head: Vec<u8>,
         body: Box<dyn AsyncRead + Send + Unpin>,
@@ -38,7 +39,7 @@ impl HostState {
         Self {
             head,
             body: Mutex::new(body),
-            runtime,
+            runtime: Some(runtime),
             read_so_far: 0,
             proto: Protocol::AwaitHead,
             head_tx: Some(head_tx),
@@ -51,6 +52,48 @@ impl HostState {
         }
     }
 
+    pub(crate) fn vacant() -> Self {
+        let (head_tx, _) = oneshot::channel();
+        let (body_tx, _) = mpsc::channel(1);
+        Self {
+            head: Vec::new(),
+            body: Mutex::new(Box::new(crate::MemoryBody::new(Vec::new()))),
+            runtime: None,
+            read_so_far: 0,
+            proto: Protocol::AwaitHead,
+            head_tx: Some(head_tx),
+            body_tx,
+            fail: None,
+            deadline_at: Instant::now() + Duration::from_secs(30),
+            wasi: WasiCtxBuilder::new()
+                .allow_blocking_current_thread(true)
+                .build_p1(),
+        }
+    }
+
+    pub(crate) fn rebind(
+        &mut self,
+        head: Vec<u8>,
+        body: Box<dyn AsyncRead + Send + Unpin>,
+        runtime: tokio::runtime::Handle,
+        head_tx: oneshot::Sender<ResponseHead>,
+        body_tx: mpsc::Sender<Bytes>,
+        deadline: Duration,
+    ) {
+        self.head = head;
+        self.body = Mutex::new(body);
+        self.runtime = Some(runtime);
+        self.read_so_far = 0;
+        self.proto = Protocol::AwaitHead;
+        self.head_tx = Some(head_tx);
+        self.body_tx = body_tx;
+        self.fail = None;
+        self.deadline_at = Instant::now() + deadline;
+        self.wasi = WasiCtxBuilder::new()
+            .allow_blocking_current_thread(true)
+            .build_p1();
+    }
+
     pub(crate) fn take_fail(&mut self) -> Option<ExecError> {
         self.fail.take()
     }
@@ -61,6 +104,12 @@ impl HostState {
 
     fn remaining(&self) -> Duration {
         self.deadline_at.saturating_duration_since(Instant::now())
+    }
+
+    fn runtime_handle(&self) -> Result<tokio::runtime::Handle, wasmtime::Error> {
+        self.runtime
+            .clone()
+            .ok_or_else(|| wasmtime::Error::msg("host runtime missing"))
     }
 
     fn violate<T>(&mut self, kind: &'static str) -> Result<T, wasmtime::Error> {
@@ -182,7 +231,7 @@ fn body_read(
             .data_mut()
             .violate("deadline exceeded during body_read");
     }
-    let runtime = caller.data().runtime.clone();
+    let runtime = caller.data().runtime_handle()?;
     let chunk = {
         let host = caller.data();
         let mut guard = host
@@ -216,7 +265,7 @@ fn send_chunk(caller: &mut Caller<'_, HostState>, bytes: Vec<u8>) -> Result<i32,
             .violate("deadline exceeded during resp_write");
     }
     let tx = caller.data().body_tx.clone();
-    let runtime = caller.data().runtime.clone();
+    let runtime = caller.data().runtime_handle()?;
     match runtime
         .block_on(async { tokio::time::timeout(remaining, tx.send(Bytes::from(bytes))).await })
     {

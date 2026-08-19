@@ -15,6 +15,16 @@ pub struct ArtifactManifest {
     #[serde(default)]
     pub capabilities: CapabilityMeta,
     pub limits: LimitsMeta,
+    #[serde(default)]
+    pub precompiled: std::collections::BTreeMap<String, PrecompiledMeta>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PrecompiledMeta {
+    pub cwasm: String,
+    pub wasmtime: String,
+    pub sha256: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -92,6 +92,12 @@ impl InstanceSlot<Warm> {
         &self.state.facade
     }
 
+    #[must_use]
+    pub(crate) fn pre(&self) -> &wasmtime::InstancePre<crate::host::HostState> {
+        &self.state.pre
+    }
+
+    #[allow(dead_code)]
     pub(crate) fn begin(
         &self,
         host: HostState,
@@ -132,7 +138,7 @@ impl InstanceSlot<Executing> {
     pub fn finish(self) {}
 }
 
-fn deadline_ticks(deadline: Duration, tick: Duration) -> u64 {
+pub(crate) fn deadline_ticks(deadline: Duration, tick: Duration) -> u64 {
     let ticks = deadline.as_nanos() / tick.as_nanos().max(1);
     ticks.max(1) as u64
 }

@@ -21,4 +21,7 @@ pub struct BddWorld {
     pub first_byte: Option<u8>,
     pub more_after_first: Option<Vec<u8>>,
     pub prior_body: Option<String>,
+    pub teardown_after_body: Option<bool>,
+    pub pool_idle: Option<usize>,
+    pub snapshot_exec: Option<raddy_executor::ToyExecutor>,
 }

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+Stage 5 fast path: warm pool, detached teardown, cwasm serialize/deserialize,
+mimalloc on the binary, `just bench` / `just bench-check`. `@stage-5`.
+
 Stage 4 snapshot resume: Wizer 11 over an ABI guest, `RestoreStrategy::Snapshot`,
 `raddy-artifact` manifests. `@stage-4` hello / entropy / REQUEST_TIME.
 Symfony-from-snapshot waits on the raddy SAPI (ADR 0009).

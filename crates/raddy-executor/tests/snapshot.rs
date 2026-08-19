@@ -142,3 +142,16 @@ deadline_ms = 30000
     let err = validate_module(&m, snap_guest_raw()).expect_err("raw is not the pin");
     assert!(err.to_string().contains("hash"));
 }
+
+#[allow(unsafe_code)]
+#[test]
+fn serialize_deserialize_is_the_default_load() {
+    let facade = raddy_executor::EngineBuilder::new()
+        .epoch_tick(Duration::from_millis(10))
+        .build()
+        .expect("engine");
+    let compiled = facade.load_wasm_bytes(snap_guest_wizer()).expect("compile");
+    let cwasm = facade.serialize_module(&compiled).expect("serialize");
+    let loaded = unsafe { facade.load_cwasm_bytes(&cwasm) }.expect("deserialize");
+    let _ = loaded;
+}
