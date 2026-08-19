@@ -48,6 +48,7 @@ pub fn toy_guest_wasm(name: &str) -> Option<&'static [u8]> {
             env!("OUT_DIR"),
             "/flood_write.wasm"
         ))),
+        "slow_echo" => Some(include_bytes!(concat!(env!("OUT_DIR"), "/slow_echo.wasm"))),
         _ => None,
     }
 }

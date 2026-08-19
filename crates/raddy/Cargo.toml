@@ -7,6 +7,9 @@ publish.workspace = true
 
 [dependencies]
 raddy-config = { path = "../raddy-config" }
+raddy-executor = { path = "../raddy-executor" }
+raddy-server = { path = "../raddy-server" }
+tokio.workspace = true
 
 [lints]
 workspace = true

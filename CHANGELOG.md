@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+Stage 2 HTTP ingress: `raddy-server` on hyper 1.11, envelope mapping, 503
+on saturation, streamed TTFB. `@stage-2` scenarios. No GitHub tag.
+
 Audit of `origin/dev` (`proj/crawl/audit.md`): typestate is on the real
 executor path, guest lengths are bounded before allocate, request bodies
 stream, missing `resp_end` / bad heads / non-zero exits are Protocol,
