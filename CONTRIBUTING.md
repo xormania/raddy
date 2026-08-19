@@ -2,7 +2,10 @@
 
 Code enters `dev` only through pull requests. `master` is the published line.
 Work starts from `origin/dev` on a temporary branch. Only **xormania** approves
-and merges. Agents open PRs as **xor-machine** and stop. Do not request
+and merges. Agents open draft PRs through a GitHub write path whose resulting
+visible author is **xormania**, verify that author, and stop. Credentials and
+transport authentication are separate from attribution and need not share its
+label. If no available path produces xormania attribution, stop. Do not request
 reviewers.
 
 `just check` is the gate. Green before every commit that is not docs-only.
@@ -64,40 +67,21 @@ Examples: `Docs: house rules for commits and pull requests`,
 
 ## PR body
 
-The body is how the change is reviewed. Fill every section. Delete a section
-only if it cannot apply, and say so in one line.
+The body is how the change is reviewed. It is a self-contained explanation for
+a reader who never saw the chat, not a commit diary or a prose copy of the diff.
 
-### Why
+There is no fixed set of narrative headings. Follow the shape of the change:
 
-The problem or decision that made this change necessary. Write it so a reader
-who never saw the chat still knows why this exists. Not a restatement of the
-title.
+- lead with the concrete problem or decision and why it matters;
+- explain the mechanism, meaningful boundaries, and what remains unchanged or
+  out of scope;
+- use compact tables where they make comparisons or contracts easier to judge;
+- finish with `## Verification`, naming the exact commands or hosted evidence
+  and the results that matter.
 
-### What
+Every figure must be produced at the time of writing by a named command or a
+linked CI run. Do not rely on recalled numbers. For a docs-only change with
+nothing quantitative to measure, say that plainly in `Verification`.
 
-What changed, in observable terms: behavior, files that matter, what did not
-change. Not a file list (`git diff --stat` already is).
-
-### Background
-
-Context a reviewer needs and will not get from the diff: the prior state, a
-constraint, a rejected alternative. Keep it short.
-
-### Data
-
-Evidence. Every figure is produced by a command at the time of writing, not
-recalled. Paste the command and the line that matters, or link to CI.
-
-If there is nothing to measure, write `none` and why (for example: docs-only,
-rename with no behavior change).
-
-Do not put a number in Why/What/Background unless Data has the command that
-produced it.
-
-## Checks
-
-State what you ran. For Rust, that is `just check` unless the change is
-docs-only. Guest C still needs `WASI_SDK_PATH`. CI on the PR is the same
-recipe; it does not replace saying what you ran locally.
-
-Use the repository pull-request template. Leave the headings in place.
+Use the repository pull-request template. Its checklist is the only fixed
+section. PRs start as drafts; complete the checklist before marking one ready.

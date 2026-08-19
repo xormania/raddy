@@ -46,9 +46,12 @@ Every session that writes to the tree:
    config. No `Co-Authored-By`. No generated-with footers.
 4. Once `justfile` exists, `just check` green before every commit that is not
    docs-only. Never commit red.
-5. Push the temp branch and open a PR **into `dev`**, authenticated as
-   **xor-machine** (xor-machine PAT / `gh` as xor-machine). Do not request
-   reviewers. Do not `@`-mention xormania for review.
+5. Push the temp branch and open a draft PR **into `dev`** through a GitHub
+   write path whose resulting visible author is **xormania**, then verify that
+   author. Credentials and transport authentication are separate from
+   attribution; do not change working credentials merely to make their labels
+   match. If no available write path produces xormania attribution, stop. Do
+   not request reviewers. Do not `@`-mention xormania for review.
 6. Stop. Do not approve. Do not merge. Do not push to `dev` or `master`.
    xormania takes over after the PR exists.
 
@@ -59,9 +62,10 @@ Existing `stage-0` / `stage-1` tags are historical only (ADR 0003).
 `.github/CODEOWNERS` is `* @xormania`. That is the only required reviewer.
 
 Names and PR bodies: `CONTRIBUTING.md`. Commits stay `type(scope): summary`.
-PR titles are `Label: summary` (`Docs:`, `CI:`, `Feat:`, …). The PR body is
-Why / What / Background / Data / Checks — Data holds measured figures, or
-`none`.
+PR titles are `Label: summary` (`Docs:`, `CI:`, `Feat:`, …). PR bodies follow
+the Serena pattern: a tailored, self-contained review narrative with
+change-specific headings, explicit boundaries, and command-backed verification.
+Only the checklist template is fixed.
 
 ## Serena
 
@@ -141,5 +145,5 @@ invalid, not passing.
 ```bash
 git status --short --branch
 # just check, once the justfile exists and Rust changed
-# PR into origin/dev as xor-machine; do not merge
+# draft PR into origin/dev as xormania; do not merge
 ```
