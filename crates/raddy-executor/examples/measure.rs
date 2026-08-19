@@ -77,8 +77,10 @@ fn main() {
             ttfb.push(t0.elapsed().as_nanos());
             while resp.body.recv().await.is_some() {}
             let _ = resp.response_complete.send(());
+            let teardown = resp.teardown;
             resp.done.await.expect("done").expect("clean");
             e2e.push(t0.elapsed().as_nanos());
+            teardown.await.expect("teardown");
         }
     });
 
