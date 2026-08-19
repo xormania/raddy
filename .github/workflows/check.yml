@@ -17,12 +17,17 @@ jobs:
     timeout-minutes: 30
     env:
       CARGO_TERM_COLOR: always
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
       WASI_SDK_PATH: ${{ github.workspace }}/.wasi-sdk
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         run: rustup show
+
+      - name: Check formatting early
+        run: cargo fmt --check
 
       - name: Install just
         run: |
@@ -46,7 +51,12 @@ jobs:
           echo "$ver"
           echo "$ver" | grep -q wasi-sdk
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Restore Rust and guest caches
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-directories: guest/php/out
+          key: php-${{ hashFiles('guest/php/php-cgi.lock') }}
 
       - name: just check
         run: just check
