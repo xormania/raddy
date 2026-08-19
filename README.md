@@ -14,6 +14,9 @@ The rest of the pin table (wasmtime, Wizer, wasi-sdk, PHP, Symfony, crates)
 lives in `proj/plan.md`. Anything marked "latest at init" is whatever
 `Cargo.lock` resolved during Stage 0.
 
+From Stage 1, guest C builds need `WASI_SDK_PATH` set to a wasi-sdk 33 root.
+Do not put a home-directory path in tracked files.
+
 ## Check
 
 ```bash
