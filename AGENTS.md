@@ -46,7 +46,7 @@ Every session that writes to the tree:
    config. No `Co-Authored-By`. No generated-with footers.
 4. Once `justfile` exists, `just check` green before every commit that is not
    docs-only. Never commit red.
-5. Push the temp branch and open a PR **into `dev`** through a GitHub write
+5. Push the temp branch and open a draft PR **into `dev`** through a GitHub write
    path whose resulting visible author is **xormania**, then verify that author.
    Credentials and transport authentication are separate from attribution; do
    not change working credentials merely to make their labels match. If no

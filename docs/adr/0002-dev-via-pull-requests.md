@@ -15,7 +15,7 @@ not land on `dev` by direct push.
 
 ## Decision
 
-- Agents start from `origin/dev`, work on a temporary branch, and open a PR
+- Agents start from `origin/dev`, work on a temporary branch, and open a draft PR
   into `dev` through a GitHub write path whose resulting visible author is
   **xormania**. They verify that author and stop if no available path produces
   xormania attribution.

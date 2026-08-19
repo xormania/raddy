@@ -2,7 +2,7 @@
 
 Code enters `dev` only through pull requests. `master` is the published line.
 Work starts from `origin/dev` on a temporary branch. Only **xormania** approves
-and merges. Agents open PRs through a GitHub write path whose resulting visible
+and merges. Agents open draft PRs through a GitHub write path whose resulting
 author is **xormania**, verify that author, and stop. Credentials and transport
 authentication are separate from attribution and need not share its label. If no
 available path produces xormania attribution, stop. Do not request reviewers.
