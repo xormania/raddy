@@ -36,7 +36,9 @@ jobs:
           curl -fsSL "$url" -o /tmp/wasi-sdk.tar.gz
           mkdir -p "${WASI_SDK_PATH}"
           tar -xzf /tmp/wasi-sdk.tar.gz --strip-components=1 -C "${WASI_SDK_PATH}"
-          "${WASI_SDK_PATH}/bin/clang" --version
+          ver="$("${WASI_SDK_PATH}/bin/clang" --version)"
+          echo "$ver"
+          echo "$ver" | grep -q wasi-sdk
 
       - uses: Swatinem/rust-cache@v2
 

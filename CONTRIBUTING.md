@@ -5,7 +5,8 @@ Work starts from `origin/dev` on a temporary branch. Only **xormania** approves
 and merges. Agents open PRs as **xor-machine** and stop.
 
 `just check` is the gate. Green before every commit that is not docs-only.
-Never commit red. Never force-push. Never rewrite history.
+Never commit red. Never force-push. Never rewrite history. Do not create
+GitHub tags.
 
 Author and committer stay
 `xormania <127287135+xormania@users.noreply.github.com>`. Do not change git

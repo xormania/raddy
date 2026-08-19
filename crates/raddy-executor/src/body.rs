@@ -34,3 +34,18 @@ impl AsyncRead for MemoryBody {
         Poll::Ready(Ok(()))
     }
 }
+
+/// A request body that never yields EOF. Used to prove execute does not wait
+/// on the client finishing the body before the guest can emit a head.
+#[derive(Debug, Default)]
+pub struct OpenBody;
+
+impl AsyncRead for OpenBody {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        _buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Poll::Pending
+    }
+}

@@ -53,7 +53,8 @@ Every session that writes to the tree:
    **xormania** approves and merges.
 
 No force-push. No history rewrite. No amending a commit that is already on a
-remote branch.
+remote branch. Do not create GitHub tags (`stage-*`, `v*`, or otherwise).
+Existing `stage-0` / `stage-1` tags are historical only (ADR 0003).
 
 `.github/CODEOWNERS` is `* @xormania`. That is the only required reviewer.
 

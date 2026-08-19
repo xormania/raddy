@@ -3,15 +3,19 @@
 mod body;
 mod engine;
 mod error;
+mod guest_sdk;
 mod host;
+mod limits;
 mod mock;
 mod proto;
 mod slot;
 mod toy;
 
-pub use body::MemoryBody;
+pub use body::{MemoryBody, OpenBody};
 pub use engine::{EngineBuilder, EngineFacade};
 pub use error::ExecError;
+pub use guest_sdk::is_wasi_sdk_33;
+pub use limits::{MAX_REQ_BODY_BYTES, MAX_RESP_CHUNK_BYTES, MAX_RESP_HEAD_BYTES};
 pub use mock::MockCapabilities;
 pub use proto::{ProtoEvent, Protocol};
 pub use slot::{Cold, Executing, InstanceSlot, Warm};
@@ -35,6 +39,8 @@ pub struct ExecResponse {
     pub head: ResponseHead,
     /// Closed by the executor when the guest calls `raddy_resp_end`.
     pub body: mpsc::Receiver<Bytes>,
+    /// Completes when the worker finishes. `Ok(())` only on a clean end.
+    pub done: tokio::sync::oneshot::Receiver<Result<(), ExecError>>,
 }
 
 impl std::fmt::Debug for ExecRequest {
@@ -51,6 +57,7 @@ impl std::fmt::Debug for ExecResponse {
         f.debug_struct("ExecResponse")
             .field("head", &self.head)
             .field("body", &"<channel>")
+            .field("done", &"<oneshot>")
             .finish()
     }
 }

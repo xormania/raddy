@@ -9,15 +9,13 @@ use cucumber::World as _;
 
 pub use world::BddWorld;
 
-/// Run every feature, or only `@stage-N` when `RADDY_BDD_STAGE` is set.
+/// Run every feature, or only `@stage-N` when `BDD_STAGE` is set.
 pub async fn run() {
     let features = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../features");
     let features = features
         .canonicalize()
         .expect("features/ must exist at the repository root");
-    let stage = std::env::var("RADDY_BDD_STAGE")
-        .ok()
-        .filter(|s| !s.is_empty());
+    let stage = std::env::var("BDD_STAGE").ok().filter(|s| !s.is_empty());
     BddWorld::cucumber()
         .with_default_cli()
         .filter_run_and_exit(features, move |_, _, scenario| match &stage {

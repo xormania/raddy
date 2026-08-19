@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+Audit of `origin/dev` (`proj/crawl/audit.md`): typestate is on the real
+executor path, guest lengths are bounded before allocate, request bodies
+stream, missing `resp_end` / bad heads / non-zero exits are Protocol,
+unknown `RADDY_*` keys fail, wasi-sdk 33 is identified, `toml` and
+`ExecResponse.done` have ADRs. Do not treat the GitHub `stage-1` tag as
+acceptance (ADR 0003).
+
 ## stage-1 — Executor on a toy guest
 
 `raddy-abi` JSON v1 codecs, `raddy-executor` on wasmtime 47.0.3 (pooling, CoW,
