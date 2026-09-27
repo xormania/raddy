@@ -1,4 +1,4 @@
-//! Warm instance pool. Spent slots are never reused (C4.1).
+//! Warm instance pool. Spent slots are never reused.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};

@@ -1,5 +1,5 @@
 # Development recipes. `just check` is the commit gate.
-# From Stage 1, guest C builds need WASI_SDK_PATH (wasi-sdk 33).
+# Guest C builds need WASI_SDK_PATH (wasi-sdk 33).
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
@@ -15,7 +15,7 @@ fmt:
 bdd:
     cargo test -p raddy-bdd --test bdd -- --nocapture
 
-# Run one stage's Gherkin slice (`@stage-N`).
+# Run one Gherkin slice (`@stage-N`).
 bdd-stage N:
     BDD_STAGE={{N}} cargo test -p raddy-bdd --test bdd -- --nocapture
 

@@ -1,4 +1,4 @@
-//! Stock WLR `php-cgi` guest. Stage 3 fallback (ADR 0008).
+//! Stock WLR `php-cgi` guest, one cold instance per request.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -81,7 +81,7 @@ impl CgiExecutor {
     }
 }
 
-/// [`CgiExecutor`] under the plan's `PhpExecutor` name.
+/// [`CgiExecutor`] under the `PhpExecutor` name.
 #[derive(Clone, Debug)]
 pub struct PhpExecutor {
     cgi: CgiExecutor,

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::ArtifactError;
 use crate::hash::sha256_hex;
 
-/// Parsed `raddy.artifact.toml` (§C6). Precompiled cwasm is Stage 5.
+/// Parsed `raddy.artifact.toml`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ArtifactManifest {

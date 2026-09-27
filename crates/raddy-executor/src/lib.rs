@@ -80,7 +80,7 @@ pub trait Executor: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ExecResponse, ExecError>> + Send;
 }
 
-/// How a cold slot becomes warm. Snapshot lands in Stage 4.
+/// How a cold slot becomes warm.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RestoreStrategy {
     Fresh,

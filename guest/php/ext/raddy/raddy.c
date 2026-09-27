@@ -1,6 +1,5 @@
 /*
- * Userland surface for the C3 hostcalls. Built only with the custom SAPI
- * (ADR 0008). Function names match proj/plan.md §C3.
+ * Userland surface for the raddy hostcalls. Built only with the custom SAPI.
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"

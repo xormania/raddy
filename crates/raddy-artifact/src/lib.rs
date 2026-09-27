@@ -1,4 +1,4 @@
-//! Artifact manifest parse, hash, and load-time validation (§C6).
+//! Artifact manifest parse, hash, and load-time validation.
 
 mod error;
 mod hash;
