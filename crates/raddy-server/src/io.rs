@@ -55,7 +55,7 @@ impl AsyncRead for IncomingRead {
 }
 
 /// Guest body channel as an HTTP/1.1 body. Closes on `done` if the worker fails
-/// after the head (C7 mid-body truncate).
+/// after the head (mid-body truncate).
 pub struct GuestBody {
     rx: mpsc::Receiver<Bytes>,
     done: oneshot::Receiver<Result<(), ExecError>>,

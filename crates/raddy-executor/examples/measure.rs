@@ -1,4 +1,4 @@
-//! Stage 5 measurements: resume, e2e hello warm, TTFB. Relative, not wall-clock claims.
+//! Measurements: resume, e2e hello warm, TTFB. Relative, not wall-clock claims.
 
 use std::time::{Duration, Instant};
 

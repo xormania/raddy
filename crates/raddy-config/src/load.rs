@@ -208,7 +208,7 @@ const SECTIONS: &[Section] = &[
 ///
 /// Split-on-every-`_` is wrong for fields that themselves contain underscores
 /// (`request_timeout_ms`). Section prefixes are matched first; the remainder is
-/// the field name. Any other `RADDY_*` key is unknown (C5). The BDD slice
+/// the field name. Any other `RADDY_*` key is unknown. The BDD slice
 /// selector is `BDD_STAGE`, outside this prefix.
 fn parse_raddy_key(key: &str) -> Result<Option<Vec<String>>, ConfigError> {
     let Some(rest) = key.strip_prefix("RADDY_") else {

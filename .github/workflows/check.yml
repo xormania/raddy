@@ -1,4 +1,4 @@
-# Same gate as `just check`. Guest C (Stage 1+) needs wasi-sdk 33.
+# Same gate as `just check`. Guest C builds need wasi-sdk 33.
 name: check
 
 on:

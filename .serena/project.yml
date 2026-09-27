@@ -58,12 +58,7 @@ included_optional_tools:
 excluded_tools: []
 fixed_tools: []
 
-# Given once on activation. The brief is AGENTS.md; the plan is proj/plan.md.
-initial_prompt: |
-  Read AGENTS.md first. Then read proj/plan.md before writing any product code.
-
-  Stages run in order. just check is the gate. The plan's pin table outranks
-  training data. Do not add tests the current stage did not name.
+initial_prompt:
 
 ls_workspace_folders:
 - .

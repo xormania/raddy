@@ -29,10 +29,6 @@ complete.
 | Symfony snapshots | Not implemented; the current snapshot demo is a C ABI guest, not a booted Symfony kernel |
 | Stability | No compatibility, performance, or security guarantees yet |
 
-The reason for the CGI executor is recorded in
-[ADR 0008](docs/adr/0008-cgi-executor-fallback.md). The later
-[ADR 0009](docs/adr/0009-snapshot-abi-guest.md) records the current C snapshot
-boundary; the server binary now follows that snapshot path.
 Production support is intended to follow maintained PHP and Symfony release
 lines, with LTS compatibility defined explicitly.
 
@@ -135,12 +131,6 @@ and command-line overrides. Unknown keys are rejected.
 | `crates/raddy-config` | typed layered configuration |
 | `crates/raddy-bdd` and `features/` | executable behavior specifications |
 | `guest/` | PHP inputs, application fixtures, and ABI test guests |
-
-## Contributing
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the development workflow, naming
-conventions, and pull-request expectations. Pull requests target `dev` and
-begin as drafts.
 
 ## License
 

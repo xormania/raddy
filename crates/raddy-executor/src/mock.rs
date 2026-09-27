@@ -1,4 +1,4 @@
-/// Capability stub. The real registry lands in Stage 6.
+/// Capability stub. Every namespace is denied.
 #[derive(Clone, Debug, Default)]
 pub struct MockCapabilities;
 
